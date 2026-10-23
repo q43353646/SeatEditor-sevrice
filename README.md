@@ -29,10 +29,10 @@ git push -u origin main
 
 | 变量名 | 值 |
 |---|---|
-| `SUPABASE_URL` | `https://rknfmzjoldpzsdeyrqmq.supabase.co` |
+| `SUPABASE_URL` | `https://XX.supabase.co` |
 | `SUPABASE_ANON_KEY` | Supabase anon public key |
 | `SUPABASE_SERVICE_KEY` | Supabase service_role key（保密） |
-| `JWT_SECRET` | 自定义随机字符串，如 `seat-editor-secret-2024` |
+| `JWT_SECRET` | 自定义随机字符串|
 | `SEAT_ROOM` | `default` |
 
 > **注意**：`SUPABASE_SERVICE_KEY` 和 `JWT_SECRET` 一定要设为 **Secret**（加密），不要设成 plaintext。
