@@ -1560,7 +1560,7 @@ function openPickPerson(regionId, row, col, replacePersonId) {
 function renderPickList() {
   const kw = document.getElementById('pickSearch').value.trim();
   const box = document.getElementById('pickList');
-  const list = state.people.filter(p => !p.seatedAt && (!kw || p.company.includes(kw)));
+  const list = state.people.filter(p => !p.seatedAt && (!kw || p.name.includes(kw) || p.company.includes(kw)));
   box.innerHTML = '';
   if (!list.length) {
     box.innerHTML = '<div class="empty-tip">暂无未入座人员</div>';
