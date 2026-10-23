@@ -11,31 +11,31 @@ cd seat-queryer
 git init
 git add .
 git commit -m "init"
-git remote add origin https://github.com/q43353646/seat-editor.git
+git remote add origin XXX.git
 git push -u origin main
 ```
 
 ### 2. Cloudflare Pages 连接仓库
 1. 登录 Cloudflare Dashboard → Workers & Pages → Create → Pages → Connect to Git
-2. 选择 `seat-editor` 仓库
+2. 选择 仓库
 3. 构建配置：
    - **Framework preset**: None
    - **Build command**: 留空
    - **Build output directory**: `/` （根目录）
    - **Root directory**: `/` （根目录）
 
-### 3. 设置环境变量（关键！）
+### 3. 设置环境变量
 在 Pages 项目 → Settings → Environment variables 中添加：
 
 | 变量名 | 值 |
 |---|---|
-| `SUPABASE_URL` | `https://XX.supabase.co` |
-| `SUPABASE_ANON_KEY` | Supabase anon public key |
-| `SUPABASE_SERVICE_KEY` | Supabase service_role key（保密） |
-| `JWT_SECRET` | 自定义随机字符串|
-| `SEAT_ROOM` | `default` |
+| `数据库_URL` | `https://XX.XXX.XX` |
+| `公钥` | Supabase anon public key |
+| `私钥` | Supabase service_role key（保密） |
+| `SECRET` | 自定义随机字符串|
+| `ROOM` | `default` |
 
-> **注意**：`SUPABASE_SERVICE_KEY` 和 `JWT_SECRET` 一定要设为 **Secret**（加密），不要设成 plaintext。
+> **注意**：`私钥` 和 `SECRET` 一定要设为 **Secret**（加密），不要设成 plaintext。
 
 ### 4. 部署
 每次 push 到 main 分支，Cloudflare Pages 自动构建部署。
