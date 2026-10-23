@@ -335,6 +335,118 @@ table.person-table tbody tr.selected { background: var(--primary-light); }
 .nature-民企 { background: #30A46C !important; border-color: #30A46C !important; }
 .nature-外企 { background: #F59E0B !important; border-color: #F59E0B !important; }
 .nature-其他 { background: #8B5CF6 !important; border-color: #8B5CF6 !important; }
+/* ===== 移动端适配 ===== */
+@media (max-width: 768px) {
+  html, body { height: 100%; overflow: hidden; }
+  body { display: flex; flex-direction: column; }
+  .topbar { height: 44px; padding: 0 10px; gap: 6px; flex-shrink: 0; }
+  .topbar h1 { display: none; }
+  .topbar .btn-sm { padding: 4px 8px; font-size: 11px; }
+  .topbar #userManageBtn { display: none !important; }
+  .topbar .btn:not(#userManageBtn):not(#logoutBtn) { display: none !important; }
+  .topbar #logoutBtn { background:#e74c3c; color:#fff; border-color:#e74c3c; }
+  .topbar .mobile-user { font-size: 11px; color: var(--text-2); margin-left: auto; }
+
+  .main { padding: 0; flex: 1; min-height: 0; flex-direction: column; }
+  .col-left, .col-resizer, .col-right, .seat-toolbar, .panel-head, .minimap, .layout-hint { display: none !important; }
+  .legend {
+    display: block !important; position: absolute; top: 8px; right: 8px; z-index: 10;
+    background: rgba(255,255,255,.92); border-radius: 6px; padding: 4px 6px;
+    font-size: 9px; max-width: 100px; box-shadow: 0 1px 4px rgba(0,0,0,.1);
+  }
+  .legend .t { font-size: 9px; margin-bottom: 2px; cursor: pointer; }
+  .legend.collapsed #legendItems { display: none; }
+  .col-center { padding: 0; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .canvas-wrap { flex: 1; padding: 0; overflow: hidden; }
+  .canvas-wrap.full { padding: 0; }
+  .layout-viewport { touch-action: none; -webkit-user-select: none; user-select: none; }
+  .stage { display: none !important; }
+  #stageNormal { display: none !important; }
+  .layout-stage { display: block !important; }
+  /* 座位文字：座位号1行、姓名1行、公司2行 */
+  .seat { overflow: hidden; padding: 2px !important; }
+  .seat .seat-id {
+    display: block; font-size: 8px; line-height: 1; opacity: .7;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .seat .seat-name {
+    display: block; font-size: 11px; font-weight: 600; line-height: 1.15;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .seat .seat-meta {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; word-break: break-all; font-size: 8px; line-height: 1.1;
+  }
+
+  /* 移动端底部面板 */
+  .mobile-panel {
+    display: flex; flex-direction: column; height: 42vh;
+    background: var(--card); border-top: 1px solid var(--border);
+    flex-shrink: 0; min-height: 0;
+  }
+  .mobile-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .mobile-tabs button {
+    flex: 1; padding: 10px; border: none; background: transparent;
+    font-size: 14px; color: var(--text-2); border-bottom: 2px solid transparent;
+  }
+  .mobile-tabs button.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+  .mobile-search { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }
+  .mobile-search input {
+    flex: 1; padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 14px; outline: none;
+  }
+  .mobile-search .btn { padding: 7px 12px; font-size: 13px; }
+  .mobile-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .mobile-list table { width: 100%; border-collapse: collapse; }
+  .mobile-list th, .mobile-list td { padding: 10px 8px; text-align: left; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+  .mobile-list th { color: var(--text-2); font-weight: 500; font-size: 12px; position: sticky; top: 0; background: #fff; }
+  .mobile-list tr { cursor: pointer; }
+  .mobile-list tr:active { background: #f5f7fa; }
+  .mobile-list .ellipsis { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* 换座模式提示条 */
+  .swap-banner {
+    display: none; position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    background: var(--primary); color: #fff; padding: 8px 16px; border-radius: 20px;
+    font-size: 13px; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,.2);
+    align-items: center; gap: 10px;
+  }
+  .swap-banner.show { display: flex; }
+  .swap-banner button {
+    background: rgba(255,255,255,.25); border: none; color: #fff;
+    padding: 4px 12px; border-radius: 12px; font-size: 12px; cursor: pointer;
+  }
+
+  /* 座位高亮闪烁动画 */
+  @keyframes seatPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(229,72,77,.7); }
+    50% { box-shadow: 0 0 0 12px rgba(229,72,77,0); }
+  }
+  .seat.pulsing { animation: seatPulse 0.8s ease-in-out 3; border-color: #E5484D !important; }
+
+  /* 长按菜单（移动端） */
+  .mobile-seat-menu {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 999;
+    background: #fff; border-radius: 16px 16px 0 0; padding: 12px 0 24px;
+    box-shadow: 0 -4px 20px rgba(0,0,0,.15);
+    transform: translateY(100%); transition: transform .2s;
+  }
+  .mobile-seat-menu.show { transform: translateY(0); }
+  .mobile-seat-menu .mm-title { padding: 8px 16px; font-size: 13px; color: var(--text-2); border-bottom: 1px solid #f0f0f0; margin-bottom: 8px; }
+  .mobile-seat-menu button {
+    display: block; width: 100%; padding: 14px 16px; border: none; background: transparent;
+    text-align: left; font-size: 15px; cursor: pointer;
+  }
+  .mobile-seat-menu button:active { background: #f5f7fa; }
+  .mobile-seat-menu button.danger { color: #E5484D; }
+  .mobile-seat-mask {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 998;
+  }
+  .mobile-seat-mask.show { display: block; }
+}
+@media (min-width: 769px) {
+  .mobile-panel, .swap-banner, .mobile-seat-menu, .mobile-seat-mask { display: none !important; }
+}
 </style>
 </head>
 <body>
@@ -348,7 +460,7 @@ table.person-table tbody tr.selected { background: var(--primary-light); }
   <button class="btn btn-sm" onclick="exportImage()">导出座位图</button>
   <button class="btn btn-sm" onclick="exportLayout()">导出布局备份</button>
   <button class="btn btn-sm" onclick="document.getElementById('importLayoutFile').click()">导入布局备份</button>
-  <button class="btn btn-sm" onclick="logout()" style="background:#e74c3c;color:#fff;border-color:#e74c3c">退出登录</button>
+  <button class="btn btn-sm" id="logoutBtn" onclick="logout()" style="background:#e74c3c;color:#fff;border-color:#e74c3c">退出登录</button>
   <input type="file" id="importLayoutFile" accept=".json" class="hidden" onchange="importLayout(event)">
 </div>
 
@@ -740,6 +852,30 @@ table.person-table tbody tr.selected { background: var(--primary-light); }
 <div class="tooltip" id="tooltip"></div>
 <div class="toast" id="toast"></div>
 
+<!-- ===== 移动端专用 UI（必须在 script 之前，否则 initMobile 找不到 DOM） ===== -->
+<div class="swap-banner" id="swapBanner">
+  <span id="swapBannerText">点击目标座位换座</span>
+  <button onclick="cancelSwapMode()">取消</button>
+</div>
+<div class="mobile-panel" id="mobilePanel">
+  <div class="mobile-tabs">
+    <button class="active" id="tabUnseated" onclick="switchMobileTab('unseated')">未入座人员</button>
+    <button id="tabSeated" onclick="switchMobileTab('seated')">已入座人员</button>
+  </div>
+  <div class="mobile-search" id="mobileSearchBar">
+    <input type="text" id="mobileSearchInput" placeholder="请输入查询的人员名/公司名" oninput="renderMobileList()">
+    <button class="btn btn-primary" id="mobileAddBtn" onclick="openAddPerson()">添加人员</button>
+  </div>
+  <div class="mobile-list" id="mobileList"></div>
+</div>
+<div class="mobile-seat-mask" id="seatMenuMask" onclick="closeMobileSeatMenu()"></div>
+<div class="mobile-seat-menu" id="mobileSeatMenu">
+  <div class="mm-title" id="mobileSeatMenuTitle">座位操作</div>
+  <button onclick="mobileSeatAction('swap')">换座</button>
+  <button onclick="mobileSeatAction('replace')">换人</button>
+  <button class="danger" onclick="mobileSeatAction('remove')">移除人员</button>
+</div>
+
 <script>
 // ==================== 状态 ====================
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -954,6 +1090,7 @@ function renderAll() {
   renderSeated();
   renderLegend();
   renderStats();
+  if (typeof renderMobileList === 'function' && isMobile) renderMobileList();
   save();
 }
 function renderStats() {
@@ -2015,27 +2152,31 @@ function renderLayoutView() {
               const v = f==='name'?p.name:f==='company'?p.company:f==='title'?(p.title||''):(p.group||'');
               return `<div class="${f===state.seatDisplay.primary?'seat-name':'seat-meta'}">${esc(v)}</div>`;
             }).join('');
-            d.draggable = true;
+            d.draggable = !(typeof isMobile !== 'undefined' && isMobile);
             d.ondragstart = (e) => {
               e.dataTransfer.setData('dragPerson', p.id);
               e.stopPropagation();
               hideTooltip();
             };
-            d.onmouseenter = (e) => { if (!state.spaceDown) showTooltip(e, p, seatId); };
-            d.onmouseleave = hideTooltip;
-            d.onclick = (e) => { e.stopPropagation(); openSeatMenu(e, r.id, si, sj, p); };
+            if (!(typeof isMobile !== 'undefined' && isMobile)) {
+              d.onmouseenter = (e) => { if (!state.spaceDown) showTooltip(e, p, seatId); };
+              d.onmouseleave = hideTooltip;
+              d.onclick = (e) => { e.stopPropagation(); openSeatMenu(e, r.id, si, sj, p); };
+            }
           }
         } else {
           d.classList.add('empty');
           d.innerHTML = `<div class="seat-id">${seatId}</div>`;
-          d.onclick = () => {
-            if (state.editMode) {
-              r.seats[si][sj] = (s && s.off) ? null : {off:true};
-              renderAll();
-            } else {
-              openPickPerson(r.id, si, sj);
-            }
-          };
+          if (!(typeof isMobile !== 'undefined' && isMobile)) {
+            d.onclick = () => {
+              if (state.editMode) {
+                r.seats[si][sj] = (s && s.off) ? null : {off:true};
+                renderAll();
+              } else {
+                openPickPerson(r.id, si, sj);
+              }
+            };
+          }
         }
         d.ondragover = (e) => { if (!state.spaceDown) { e.preventDefault(); d.classList.add('drag-over'); } };
         d.ondragleave = () => d.classList.remove('drag-over');
@@ -3087,6 +3228,346 @@ function highlightCompanySeat(seatEl, p) {
 }
 
 init();
+
+// ==================== 移动端适配 ====================
+const isMobile = window.matchMedia('(max-width: 768px)').matches || ('ontouchstart' in window && window.innerWidth < 1024);
+let mobileTab = 'unseated';
+let touchState = null; // {startX, startY, moved, longPressTimer, longPressFired, startSeat}
+let pinchState = null; // {startDist, startScale, centerX, centerY, startViewX, startViewY}
+let mobileSwapMode = null; // {regionId, row, col}
+let mobileReplaceMode = null; // {regionId, row, col}
+
+function initMobile() {
+  if (!isMobile) return;
+  // 移动端禁用公司高亮（避免无限闪烁黑框）
+  selectedCompanies = [];
+  // 顶部显示登录手机号
+  const uname = localStorage.getItem('seat_username') || '';
+  if (uname) {
+    const sp = document.createElement('span');
+    sp.className = 'mobile-user';
+    sp.textContent = uname;
+    document.querySelector('.topbar').insertBefore(sp, document.getElementById('logoutBtn'));
+  }
+  // 强制全局布局视图
+  if (!state.layoutMode) toggleLayoutMode();
+  // 隐藏小地图和提示
+  document.getElementById('minimap').style.display = 'none';
+  document.getElementById('layoutHint').style.display = 'none';
+  // 图例点击收起/展开
+  const legendBox = document.getElementById('legendBox');
+  if (legendBox) {
+    legendBox.querySelector('.t').onclick = () => legendBox.classList.toggle('collapsed');
+    legendBox.classList.add('collapsed'); // 默认收起
+  }
+  // 绑定 touch 事件（绑 document 避免座位子元素拦截）
+  document.addEventListener('touchstart', onTouchStart, {passive: false});
+  document.addEventListener('touchmove', onTouchMove, {passive: false});
+  document.addEventListener('touchend', onTouchEnd, {passive: false});
+  document.addEventListener('touchcancel', onTouchEnd, {passive: false});
+  // 渲染列表
+  renderMobileList();
+}
+
+function switchMobileTab(tab) {
+  mobileTab = tab;
+  document.getElementById('tabUnseated').classList.toggle('active', tab === 'unseated');
+  document.getElementById('tabSeated').classList.toggle('active', tab === 'seated');
+  // 已入座tab隐藏"添加人员"按钮
+  document.getElementById('mobileAddBtn').style.display = tab === 'unseated' ? '' : 'none';
+  renderMobileList();
+}
+
+function getMobileFilter() {
+  return (document.getElementById('mobileSearchInput').value || '').trim();
+}
+
+function renderMobileList() {
+  const list = document.getElementById('mobileList');
+  const kw = getMobileFilter();
+  let rows = '';
+  if (mobileTab === 'unseated') {
+    const people = state.people.filter(p => !p.seatedAt && (!kw || (p.name||'').includes(kw) || (p.company||'').includes(kw)));
+    rows = `<table><thead><tr><th class="ellipsis">公司</th><th class="ellipsis">姓名</th><th class="ellipsis">职位</th></tr></thead><tbody>` +
+      people.map(p => `<tr onclick="mobilePickPerson('${p.id}')">
+        <td class="ellipsis">${esc(p.company||'')}</td>
+        <td class="ellipsis">${esc(p.name||'')}</td>
+        <td class="ellipsis">${esc(p.title||'')}</td>
+      </tr>`).join('') + `</tbody></table>`;
+    if (!people.length) rows = '<div style="padding:30px;text-align:center;color:#999;font-size:13px">暂无未入座人员</div>';
+  } else {
+    const people = state.people.filter(p => p.seatedAt && (!kw || (p.name||'').includes(kw) || (p.company||'').includes(kw)));
+    rows = `<table><thead><tr><th class="ellipsis">公司</th><th class="ellipsis">姓名</th><th class="ellipsis">座位</th></tr></thead><tbody>` +
+      people.map(p => {
+        const reg = state.regions.find(r => r.id === p.seatedAt.regionId);
+        const seatLabel = (reg ? reg.name : '') + '-' + (p.seatedAt.row+1) + '-' + (p.seatedAt.col+1);
+        return `<tr onclick="mobileLocatePerson('${p.id}')">
+        <td class="ellipsis">${esc(p.company||'')}</td>
+        <td class="ellipsis">${esc(p.name||'')}</td>
+        <td class="ellipsis">${esc(seatLabel)}</td>
+      </tr>`;
+      }).join('') + `</tbody></table>`;
+    if (!people.length) rows = '<div style="padding:30px;text-align:center;color:#999;font-size:13px">暂无已入座人员</div>';
+  }
+  list.innerHTML = rows;
+}
+
+// 点击未入座人员：如果在换人模式，替换座位；否则弹编辑
+function mobilePickPerson(pid) {
+  if (mobileReplaceMode) {
+    // 把选中的人放到目标座位，原座位的人放回未入座
+    const {regionId, row, col} = mobileReplaceMode;
+    const region = state.regions.find(r => r.id === regionId);
+    const oldSeat = region.seats[row][col];
+    const newPerson = state.people.find(p => p.id === pid);
+    // 原座位的人放回未入座
+    if (oldSeat && oldSeat.personId) {
+      const oldPerson = state.people.find(p => p.id === oldSeat.personId);
+      if (oldPerson) oldPerson.seatedAt = null;
+    }
+    // 新人入座
+    region.seats[row][col] = {personId: pid};
+    newPerson.seatedAt = {regionId, row, col, regionName: region.name};
+    mobileReplaceMode = null;
+    renderAll();
+    renderMobileList();
+    toast('换人成功');
+  } else {
+    // 普通点击：编辑人员
+    openEditPerson(state.people.find(p => p.id === pid));
+  }
+}
+
+// 点击已入座人员：定位+闪烁+显示完整信息
+function mobileLocatePerson(pid) {
+  const p = state.people.find(pp => pp.id === pid);
+  if (!p || !p.seatedAt) return;
+  toast(`${p.company} · ${p.name} · ${p.title||''}`);
+  const {regionId, row, col} = p.seatedAt;
+  // 先渲染确保 DOM 存在
+  renderLayoutView();
+  // 同步读位置（强制布局刷新）
+  const seatEl = document.querySelector(`[data-seat="${regionId}-${row}-${col}"]`);
+  const vp = document.getElementById('layoutViewport');
+  if (!seatEl || !vp) return;
+  const sr = seatEl.getBoundingClientRect();
+  const vr = vp.getBoundingClientRect();
+  // 计算座位在 canvas 内的未缩放坐标：(视口位置 - viewX) / scale
+  const seatCX = (sr.left + sr.width/2 - vr.left - state.viewX) / state.viewScale;
+  const seatCY = (sr.top + sr.height/2 - vr.top - state.viewY) / state.viewScale;
+  // 设置 viewX/viewY 让座位居中
+  state.viewX = vr.width/2 - seatCX * state.viewScale;
+  state.viewY = vr.height/2 - seatCY * state.viewScale;
+  document.getElementById('layoutCanvas').style.transform =
+    `translate(${state.viewX}px, ${state.viewY}px) scale(${state.viewScale})`;
+  // 闪烁
+  setTimeout(() => {
+    const el = document.querySelector(`[data-seat="${regionId}-${row}-${col}"]`);
+    if (el) {
+      el.classList.add('pulsing');
+      setTimeout(() => el.classList.remove('pulsing'), 2500);
+    }
+  }, 50);
+}
+
+// ===== Touch 手势 =====
+function getSeatFromTouch(t) {
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  const seatEl = el ? el.closest('.seat') : null;
+  if (!seatEl) return null;
+  const ds = seatEl.dataset.seat;
+  if (!ds) return null;
+  const [regionId, row, col] = ds.split('-');
+  return {regionId, row: +row, col: +col, el: seatEl};
+}
+
+function onTouchStart(e) {
+  if (!state.layoutMode) return;
+  // 只处理 layoutViewport 内的触摸
+  const vp = document.getElementById('layoutViewport');
+  if (!vp.contains(e.target)) return;
+  if (e.touches.length === 2) {
+    // 双指缩放开始
+    const [t1, t2] = [e.touches[0], e.touches[1]];
+    const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    const rect = vp.getBoundingClientRect();
+    pinchState = {
+      startDist: dist,
+      startScale: state.viewScale,
+      centerX: (t1.clientX + t2.clientX)/2 - rect.left,
+      centerY: (t1.clientY + t2.clientY)/2 - rect.top,
+      startViewX: state.viewX,
+      startViewY: state.viewY
+    };
+    if (touchState && touchState.longPressTimer) { clearTimeout(touchState.longPressTimer); touchState = null; }
+    e.preventDefault();
+    return;
+  }
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    const seat = getSeatFromTouch(t);
+    touchState = {
+      startX: t.clientX, startY: t.clientY,
+      moved: false, longPressFired: false,
+      startSeat: seat
+    };
+    // 长按 500ms
+    touchState.longPressTimer = setTimeout(() => {
+      if (touchState && !touchState.moved) {
+        touchState.longPressFired = true;
+        if (seat) {
+          const region = state.regions.find(r => r.id === seat.regionId);
+          const s = region.seats[seat.row][seat.col];
+          if (s && s.personId) {
+            openMobileSeatMenu(seat);
+          } else {
+            openPickPerson(seat.regionId, seat.row, seat.col);
+          }
+        }
+      }
+    }, 500);
+  }
+}
+
+function onTouchMove(e) {
+  if (!state.layoutMode) return;
+  const vp = document.getElementById('layoutViewport');
+  if (!vp.contains(e.target)) return;
+  if (e.touches.length === 2 && pinchState) {
+    if (e.cancelable) e.preventDefault();
+    const [t1, t2] = [e.touches[0], e.touches[1]];
+    const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    const newScale = Math.max(0.2, Math.min(3, pinchState.startScale * dist / pinchState.startDist));
+    const ratio = newScale / state.viewScale;
+    state.viewX = pinchState.centerX - (pinchState.centerX - pinchState.startViewX) * ratio;
+    state.viewY = pinchState.centerY - (pinchState.centerY - pinchState.startViewY) * ratio;
+    state.viewScale = newScale;
+    document.getElementById('layoutCanvas').style.transform =
+      `translate(${state.viewX}px, ${state.viewY}px) scale(${state.viewScale})`;
+    return;
+  }
+  if (e.touches.length === 1 && touchState) {
+    const t = e.touches[0];
+    const dx = t.clientX - touchState.startX;
+    const dy = t.clientY - touchState.startY;
+    if (Math.hypot(dx, dy) > 10) {
+      if (!touchState.moved && touchState.longPressTimer) {
+        clearTimeout(touchState.longPressTimer);
+      }
+      touchState.moved = true;
+      if (e.cancelable) e.preventDefault();
+      state.viewX += dx;
+      state.viewY += dy;
+      touchState.startX = t.clientX;
+      touchState.startY = t.clientY;
+      // 直接改 transform，不重建 DOM（流畅拖动）
+      document.getElementById('layoutCanvas').style.transform =
+        `translate(${state.viewX}px, ${state.viewY}px) scale(${state.viewScale})`;
+    }
+  }
+}
+
+function onTouchEnd(e) {
+  if (touchState && touchState.longPressTimer) { clearTimeout(touchState.longPressTimer); touchState.longPressTimer = null; }
+  if (!touchState) return;
+  const wasLongPress = touchState.longPressFired;
+  const wasMoved = touchState.moved;
+  const seat = touchState.startSeat;
+  touchState = null;
+  if (wasLongPress || wasMoved) return;
+  // 快速点击
+  if (!seat) return;
+  const {regionId, row, col} = seat;
+  // 换座模式下任何点击座位都执行换座
+  if (mobileSwapMode) {
+    confirmMobileSwap(regionId, row, col);
+    return;
+  }
+  // 普通模式：短按座位不做任何事（操作全靠长按菜单）
+}
+
+// ===== 长按菜单 =====
+let mobileMenuSeat = null;
+function openMobileSeatMenu(seat) {
+  mobileMenuSeat = seat;
+  const region = state.regions.find(r => r.id === seat.regionId);
+  const s = region.seats[seat.row][seat.col];
+  const p = (s && s.personId) ? state.people.find(pp => pp.id === s.personId) : null;
+  document.getElementById('mobileSeatMenuTitle').textContent =
+    (p ? (p.name + ' · ') : '') + region.name + '-' + (seat.row+1) + '-' + (seat.col+1);
+  document.getElementById('seatMenuMask').classList.add('show');
+  document.getElementById('mobileSeatMenu').classList.add('show');
+}
+function closeMobileSeatMenu() {
+  document.getElementById('seatMenuMask').classList.remove('show');
+  document.getElementById('mobileSeatMenu').classList.remove('show');
+  mobileMenuSeat = null;
+}
+function mobileSeatAction(action) {
+  if (!mobileMenuSeat) return;
+  const {regionId, row, col} = mobileMenuSeat;
+  const region = state.regions.find(r => r.id === regionId);
+  const s = region.seats[row][col];
+  closeMobileSeatMenu();
+  if (action === 'remove') {
+    if (s && s.personId) {
+      const p = state.people.find(pp => pp.id === s.personId);
+      if (p) p.seatedAt = null;
+      region.seats[row][col] = null;
+      renderAll();
+      renderMobileList();
+      toast('已移除人员');
+    }
+  } else if (action === 'swap') {
+    mobileSwapMode = {regionId, row, col};
+    document.getElementById('swapBannerText').textContent = '换座中：点击目标座位（当前 ' + region.name + '-' + (row+1) + '-' + (col+1) + '）';
+    document.getElementById('swapBanner').classList.add('show');
+  } else if (action === 'replace') {
+    mobileReplaceMode = {regionId, row, col};
+    switchMobileTab('unseated');
+    toast('请从下方未入座列表选择新人');
+  }
+}
+function cancelSwapMode() {
+  mobileSwapMode = null;
+  document.getElementById('swapBanner').classList.remove('show');
+}
+function confirmMobileSwap(targetRegionId, targetRow, targetCol) {
+  if (!mobileSwapMode) return;
+  const {regionId: srcR, row: srcRow, col: srcCol} = mobileSwapMode;
+  if (srcR === targetRegionId && srcRow === targetRow && srcCol === targetCol) {
+    cancelSwapMode();
+    return;
+  }
+  const srcRegion = state.regions.find(r => r.id === srcR);
+  const dstRegion = state.regions.find(r => r.id === targetRegionId);
+  const srcSeat = srcRegion.seats[srcRow][srcCol];
+  const dstSeat = dstRegion.seats[targetRow][targetCol];
+  // 交换
+  srcRegion.seats[srcRow][srcCol] = dstSeat ? {personId: dstSeat.personId} : null;
+  dstRegion.seats[targetRow][targetCol] = srcSeat ? {personId: srcSeat.personId} : null;
+  // 更新人员 seatedAt
+  if (srcSeat && srcSeat.personId) {
+    const p = state.people.find(pp => pp.id === srcSeat.personId);
+    if (p) p.seatedAt = {regionId: targetRegionId, row: targetRow, col: targetCol, regionName: dstRegion.name};
+  }
+  if (dstSeat && dstSeat.personId) {
+    const p = state.people.find(pp => pp.id === dstSeat.personId);
+    if (p) p.seatedAt = {regionId: srcR, row: srcRow, col: srcCol, regionName: srcRegion.name};
+  }
+  cancelSwapMode();
+  renderAll();
+  renderMobileList();
+  toast('换座成功');
+}
+
+// 移动端 resize
+window.addEventListener('resize', () => {
+  if (isMobile && state.layoutMode) { fitLayoutView(); renderLayoutView(); }
+});
+
+initMobile();
 </script>
+
 </body>
 </html>
