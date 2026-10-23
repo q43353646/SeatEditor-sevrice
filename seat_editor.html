@@ -3339,28 +3339,30 @@ function mobilePickPerson(pid) {
 }
 
 // 点击已入座人员：定位+闪烁+显示完整信息
+function getSeatCanvasPos(el) {
+  let x = 0, y = 0;
+  let node = el;
+  while (node && node.id !== 'layoutCanvas') {
+    x += node.offsetLeft;
+    y += node.offsetTop;
+    node = node.offsetParent;
+  }
+  return {x, y};
+}
 function mobileLocatePerson(pid) {
   const p = state.people.find(pp => pp.id === pid);
   if (!p || !p.seatedAt) return;
   toast(`${p.company} · ${p.name} · ${p.title||''}`);
   const {regionId, row, col} = p.seatedAt;
-  // 先渲染确保 DOM 存在
   renderLayoutView();
-  // 同步读位置（强制布局刷新）
   const seatEl = document.querySelector(`[data-seat="${regionId}-${row}-${col}"]`);
   const vp = document.getElementById('layoutViewport');
   if (!seatEl || !vp) return;
-  const sr = seatEl.getBoundingClientRect();
-  const vr = vp.getBoundingClientRect();
-  // 计算座位在 canvas 内的未缩放坐标：(视口位置 - viewX) / scale
-  const seatCX = (sr.left + sr.width/2 - vr.left - state.viewX) / state.viewScale;
-  const seatCY = (sr.top + sr.height/2 - vr.top - state.viewY) / state.viewScale;
-  // 设置 viewX/viewY 让座位居中
-  state.viewX = vr.width/2 - seatCX * state.viewScale;
-  state.viewY = vr.height/2 - seatCY * state.viewScale;
+  const pos = getSeatCanvasPos(seatEl);
+  state.viewX = vp.clientWidth/2 - (pos.x + 38) * state.viewScale;
+  state.viewY = vp.clientHeight/2 - (pos.y + 30) * state.viewScale;
   document.getElementById('layoutCanvas').style.transform =
     `translate(${state.viewX}px, ${state.viewY}px) scale(${state.viewScale})`;
-  // 闪烁
   setTimeout(() => {
     const el = document.querySelector(`[data-seat="${regionId}-${row}-${col}"]`);
     if (el) {
@@ -3436,11 +3438,19 @@ function onTouchMove(e) {
   if (e.touches.length === 2 && pinchState) {
     if (e.cancelable) e.preventDefault();
     const [t1, t2] = [e.touches[0], e.touches[1]];
+    const vp = document.getElementById('layoutViewport');
+    const vr = vp.getBoundingClientRect();
     const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
     const newScale = Math.max(0.2, Math.min(3, pinchState.startScale * dist / pinchState.startDist));
-    const ratio = newScale / state.viewScale;
-    state.viewX = pinchState.centerX - (pinchState.centerX - pinchState.startViewX) * ratio;
-    state.viewY = pinchState.centerY - (pinchState.centerY - pinchState.startViewY) * ratio;
+    // 当前双指中点（相对于 vp）
+    const cx = (t1.clientX + t2.clientX)/2 - vr.left;
+    const cy = (t1.clientY + t2.clientY)/2 - vr.top;
+    // 双指中点在 canvas 内的坐标（基于开始时的变换）
+    const anchorX = (cx - pinchState.startViewX) / pinchState.startScale;
+    const anchorY = (cy - pinchState.startViewY) / pinchState.startScale;
+    // 以双指中点为锚点缩放
+    state.viewX = cx - anchorX * newScale;
+    state.viewY = cy - anchorY * newScale;
     state.viewScale = newScale;
     document.getElementById('layoutCanvas').style.transform =
       `translate(${state.viewX}px, ${state.viewY}px) scale(${state.viewScale})`;
@@ -3483,7 +3493,15 @@ function onTouchEnd(e) {
     confirmMobileSwap(regionId, row, col);
     return;
   }
-  // 普通模式：短按座位不做任何事（操作全靠长按菜单）
+  // 普通模式：短按有人座位显示信息，空座位无动作
+  if (seat) {
+    const region = state.regions.find(r => r.id === seat.regionId);
+    const s = region.seats[seat.row][seat.col];
+    if (s && s.personId) {
+      const p = state.people.find(pp => pp.id === s.personId);
+      if (p) toast(`${p.company} · ${p.name} · ${p.title||''}`);
+    }
+  }
 }
 
 // ===== 长按菜单 =====
