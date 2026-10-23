@@ -1,0 +1,12 @@
+node_modules/
+public/
+server.js
+Dockerfile
+package.json
+package-lock.json
+.env
+.env.local
+.DS_Store
+*.log
+.wrangler/
+.dev.vars

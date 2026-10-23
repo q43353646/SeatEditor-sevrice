@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>座位编辑系统 - 登录</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#f5f7fa; display:flex; align-items:center; justify-content:center; min-height:100vh; }
+.login-box { background:#fff; border-radius:12px; box-shadow:0 2px 20px rgba(0,0,0,.08); padding:40px; width:360px; }
+h1 { font-size:20px; color:#333; margin-bottom:24px; text-align:center; }
+.input-group { margin-bottom:16px; }
+label { display:block; font-size:13px; color:#666; margin-bottom:6px; }
+input { width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px; font-size:14px; outline:none; }
+input:focus { border-color:#4f6ef7; }
+.btn { width:100%; padding:12px; background:#4f6ef7; color:#fff; border:none; border-radius:8px; font-size:15px; cursor:pointer; margin-top:8px; }
+.btn:hover { background:#3d5ae0; }
+.error { color:#e74c3c; font-size:13px; margin-top:12px; text-align:center; }
+</style>
+</head>
+<body>
+<div class="login-box">
+  <h1>座位编辑系统</h1>
+  <div class="input-group">
+    <label>手机号</label>
+    <input type="text" id="username" placeholder="请输入手机号">
+  </div>
+  <div class="input-group">
+    <label>密码</label>
+    <input type="password" id="password" placeholder="请输入密码">
+  </div>
+  <button class="btn" onclick="login()">登录</button>
+  <div class="error" id="err"></div>
+</div>
+<script>
+async function login() {
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value.trim();
+  if (!username || !password) { document.getElementById('err').textContent = '请输入手机号和密码'; return; }
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const data = await res.json();
+    if (!res.ok) { document.getElementById('err').textContent = data.error || '登录失败'; return; }
+    localStorage.setItem('seat_token', data.token);
+    localStorage.setItem('seat_role', data.role);
+    localStorage.setItem('seat_username', data.username);
+    location.href = '/seat_editor.html';
+  } catch (e) {
+    document.getElementById('err').textContent = '网络错误';
+  }
+}
+document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>用户管理 - 座位编辑系统</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#f5f7fa; padding:20px; }
+.header { background:#fff; border-radius:8px; padding:16px 20px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; }
+.header h1 { font-size:18px; color:#333; }
+.header .user { font-size:14px; color:#666; }
+.btn { padding:8px 16px; border:none; border-radius:6px; cursor:pointer; font-size:14px; }
+.btn-primary { background:#4f6ef7; color:#fff; }
+.btn-danger { background:#e74c3c; color:#fff; }
+.btn-secondary { background:#eee; color:#333; }
+.card { background:#fff; border-radius:8px; padding:20px; margin-bottom:16px; }
+table { width:100%; border-collapse:collapse; }
+th, td { padding:12px; text-align:left; border-bottom:1px solid #eee; font-size:14px; }
+th { color:#666; font-weight:500; }
+.form-row { margin-bottom:12px; }
+.form-row label { display:block; font-size:13px; color:#666; margin-bottom:4px; }
+.form-row input, .form-row select { width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:6px; font-size:14px; }
+.toast { position:fixed; top:20px; right:20px; background:#333; color:#fff; padding:12px 20px; border-radius:8px; font-size:14px; display:none; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>用户管理</h1>
+  <div>
+    <span class="user" id="username"></span>
+    <button class="btn btn-secondary" onclick="location.href='/seat_editor.html'" style="margin-left:12px">返回排座</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="font-size:16px;margin-bottom:16px">新增用户</h2>
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+    <div class="form-row" style="flex:1;min-width:150px">
+      <label>手机号</label>
+      <input type="text" id="newUsername" placeholder="手机号">
+    </div>
+    <div class="form-row" style="flex:1;min-width:150px">
+      <label>密码</label>
+      <input type="password" id="newPassword" placeholder="密码">
+    </div>
+    <div class="form-row" style="flex:1;min-width:120px">
+      <label>权限</label>
+      <select id="newRole">
+        <option value="user">用户</option>
+        <option value="admin">管理</option>
+      </select>
+    </div>
+    <div class="form-row" style="align-self:flex-end">
+      <button class="btn btn-primary" onclick="addUser()">新增</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="font-size:16px;margin-bottom:16px">用户列表</h2>
+  <table>
+    <thead><tr><th>ID</th><th>手机号</th><th>权限</th><th>创建时间</th><th>操作</th></tr></thead>
+    <tbody id="userList"></tbody>
+  </table>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const token = localStorage.getItem('seat_token');
+if (!token) location.href = '/';
+document.getElementById('username').textContent = localStorage.getItem('seat_username');
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 2000);
+}
+
+async function loadUsers() {
+  const res = await fetch('/api/users', {headers: {'Authorization': 'Bearer ' + token}});
+  if (res.status === 401) { location.href = '/'; return; }
+  const users = await res.json();
+  const tbody = document.getElementById('userList');
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td>${u.id}</td>
+      <td>${u.username}</td>
+      <td>${u.role === 'admin' ? '管理' : '用户'}</td>
+      <td>${new Date(u.created_at).toLocaleString()}</td>
+      <td>${u.username === '17600066736' ? '默认管理员' : `<button class="btn btn-danger" onclick="delUser(${u.id})">删除</button>`}</td>
+    </tr>
+  `).join('');
+}
+
+async function addUser() {
+  const username = document.getElementById('newUsername').value.trim();
+  const password = document.getElementById('newPassword').value.trim();
+  const role = document.getElementById('newRole').value;
+  if (!username || !password) { toast('请输入手机号和密码'); return; }
+  const res = await fetch('/api/users', {
+    method: 'POST',
+    headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
+    body: JSON.stringify({username, password, role})
+  });
+  if (res.ok) {
+    toast('新增成功');
+    document.getElementById('newUsername').value = '';
+    document.getElementById('newPassword').value = '';
+    loadUsers();
+  } else {
+    const e = await res.json();
+    toast(e.error || '新增失败');
+  }
+}
+
+async function delUser(id) {
+  if (!confirm('确认删除该用户？')) return;
+  await fetch('/api/users/' + id, {method: 'DELETE', headers: {'Authorization': 'Bearer ' + token}});
+  toast('删除成功');
+  loadUsers();
+}
+
+function logout() {
+  localStorage.removeItem('seat_token');
+  location.href = '/';
+}
+
+loadUsers();
+</script>
+</body>
+</html>

@@ -1,0 +1,3092 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>会议座位编辑系统</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --primary: #4F6EF7;
+  --primary-light: #E8EDFF;
+  --bg: #F4F5F9;
+  --card: #FFFFFF;
+  --border: #E3E5EC;
+  --text: #1F2333;
+  --text-2: #6B7080;
+  --danger: #E5484D;
+  --success: #30A46C;
+  --disabled: #C8CBD6;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(20,24,40,.06), 0 4px 16px rgba(20,24,40,.04);
+}
+html,body { height:100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  overflow: hidden;
+}
+/* ===== 顶栏 ===== */
+.topbar {
+  height: 48px; background: var(--card); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 16px; gap: 12px;
+}
+.topbar h1 { font-size: 15px; font-weight: 600; }
+.topbar .spacer { flex:1; }
+.btn {
+  border: 1px solid var(--border); background: #fff; color: var(--text);
+  padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 12px;
+  transition: all .15s; white-space: nowrap;
+}
+.btn:hover { border-color: var(--primary); color: var(--primary); }
+.btn-primary { background: var(--primary); color:#fff; border-color: var(--primary); }
+.btn-primary:hover { background: #3D5BE0; color:#fff; }
+.btn-danger { color: var(--danger); border-color: #F3C2C4; }
+.btn-danger:hover { background: #FFF1F1; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+/* ===== 主布局 ===== */
+.main {
+  display: flex;
+  height: calc(100vh - 48px);
+  gap: 0; padding: 10px;
+}
+.col-left { width: 400px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; min-width: 200px; }
+.col-center { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 0 10px; }
+.col-right { width: 400px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; min-width: 260px; min-height: 0; overflow: hidden; }
+.panel-tabs { display:flex; gap:0; margin-bottom:10px; background:var(--card); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); flex-shrink:0; }
+.panel-tab { flex:1; padding:10px; border:none; background:transparent; font-size:13px; cursor:pointer; color:var(--text-2); border-bottom:2px solid transparent; }
+.panel-tab.active { color:var(--primary); border-bottom-color:var(--primary); font-weight:600; }
+.sub-tab { flex:1; padding:8px; border:none; background:transparent; font-size:12px; cursor:pointer; color:var(--text-2); border-bottom:2px solid transparent; }
+.sub-tab.active { color:var(--primary); border-bottom-color:var(--primary); font-weight:600; }
+.company-row { cursor:pointer; }
+.company-row.selected { background:var(--primary-light); }
+.sortable { cursor:pointer; user-select:none; }
+.switch { position:relative; display:inline-block; width:36px; height:20px; }
+.switch input { opacity:0; width:0; height:0; }
+.switch .slider { position:absolute; inset:0; background:#ccc; border-radius:20px; cursor:pointer; transition:.3s; }
+.switch .slider:before { content:''; position:absolute; width:16px; height:16px; left:2px; top:2px; background:#fff; border-radius:50%; transition:.3s; }
+.switch input:checked + .slider { background:var(--primary); }
+.switch input:checked + .slider:before { transform:translateX(16px); }
+.sort-arrow::after { content:'⇅'; opacity:.4; font-size:10px; }
+th.sort-asc .sort-arrow::after { content:'↑'; opacity:1; color:var(--primary); }
+th.sort-desc .sort-arrow::after { content:'↓'; opacity:1; color:var(--primary); }
+@keyframes hl-blink { 0%,100% { box-shadow:0 0 0 3px #000, 0 0 12px rgba(0,0,0,0.6); } 50% { box-shadow:0 0 0 3px transparent, 0 0 4px transparent; } }
+@keyframes hl-overlay { 0%,100% { background:rgba(0,0,0,0.25); } 50% { background:rgba(0,0,0,0); } }
+.seat-hl { animation: hl-blink 1s infinite; position:relative; }
+.seat-hl::after { content:''; position:absolute; inset:0; border-radius:inherit; animation: hl-overlay 1s infinite; pointer-events:none; }
+.panel {
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.panel-head {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+.panel-body { padding: 10px; overflow: auto; flex: 1; }
+/* ===== 左栏：区域编辑 ===== */
+#regionEditPanel { flex: 1.2; }
+#regionPreviewPanel { flex: 1; }
+.region-grid-wrap {
+  display: flex; justify-content: center; align-items: center;
+  padding: 14px; overflow: auto;
+}
+.region-grid {
+  display: grid; gap: 6px; position: relative;
+}
+.region-cell {
+  width: 78px; height: 56px; border-radius: 8px;
+  background: var(--primary-light); color: var(--primary);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 600; font-size: 13px; cursor: grab; user-select: none;
+  border: 2px solid transparent; transition: all .15s; position: relative;
+}
+.region-cell:hover { border-color: var(--primary); }
+.region-cell.active { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,110,247,.15); }
+.region-cell .del {
+  position: absolute; top: -6px; right: -6px; width: 16px; height: 16px;
+  background: var(--danger); color: #fff; border-radius: 50%;
+  font-size: 10px; line-height: 16px; text-align: center; cursor: pointer;
+  display: none;
+}
+.region-cell:hover .del { display: block; }
+.add-btn {
+  width: 24px; height: 24px; border-radius: 6px; background: #fff;
+  border: 1px dashed #B8BCCB; color: #8A8FA3; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; line-height: 1; transition: all .15s;
+  justify-self: center; align-self: center;
+}
+.add-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+/* 区域预览 */
+.stage-preview {
+  background: #2D3142; color: #fff; text-align: center;
+  padding: 6px; border-radius: 6px; font-size: 12px; margin-bottom: 10px;
+}
+.preview-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.preview-cell {
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px;
+  cursor: pointer; transition: all .15s; min-width: 80px;
+}
+.preview-cell:hover, .preview-cell.active { border-color: var(--primary); }
+.preview-cell .t { font-size: 11px; font-weight: 600; margin-bottom: 4px; text-align: center; }
+.preview-grid { display: grid; gap: 1px; justify-content: center; margin: 0 auto; }
+.preview-seat { width: 8px; height: 8px; border-radius: 2px; background: #E8E9EF; }
+.preview-seat.occ { background: var(--primary); }
+.preview-seat.off { background: var(--disabled); }
+/* ===== 中栏：座位编辑 ===== */
+#seatPanel { flex: 1; }
+.seat-toolbar {
+  padding: 8px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  flex-shrink: 0; background: #FAFBFD;
+}
+.stepper { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.stepper button {
+  width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--border);
+  background: #fff; cursor: pointer; font-size: 14px; line-height: 1;
+}
+.stepper button:hover { border-color: var(--primary); color: var(--primary); }
+.stepper .val { min-width: 20px; text-align: center; font-weight: 600; }
+.toggle-edit {
+  padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border);
+  background: #fff; cursor: pointer; font-size: 12px;
+}
+.toggle-edit.on { background: #FFF3CD; border-color: #E8C547; color: #8A6D00; }
+.canvas-wrap {
+  flex: 1; overflow: auto; padding: 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  position: relative;
+}
+.canvas-wrap.full { padding: 0; overflow: hidden; }
+.stage {
+  width: 60%; max-width: 500px; background: #2D3142; color: #fff;
+  text-align: center; padding: 10px; border-radius: 8px; font-size: 13px;
+  letter-spacing: 4px; flex-shrink: 0;
+}
+.seat-region { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.region-label { font-size: 12px; color: var(--text-2); margin-bottom: 2px; font-weight: 600; }
+.seat-grid { display: grid; gap: 6px; }
+.seat {
+  width: 76px; height: 60px; border-radius: 8px;
+  transition: all .1s;
+  background: #fff; border: 1px solid var(--border);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; transition: all .12s; padding: 3px; text-align: center;
+  position: relative; overflow: hidden;
+}
+.seat:hover { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,110,247,.1); }
+.seat.empty { background: #fff; }
+.seat.occupied { background: var(--primary); border-color: var(--primary); color: #fff; }
+.seat.off { background: var(--disabled); border-color: var(--disabled); cursor: not-allowed; color: #8A8FA3; }
+.seat.off:hover { box-shadow: none; border-color: var(--disabled); }
+.seat.locate-flash {
+  animation: locatePulse 0.5s infinite;
+  z-index: 5;
+}
+@keyframes locatePulse {
+  0%, 100% { box-shadow: 0 0 0 2px #F59E0B, 0 0 8px rgba(245,158,11,0.6); }
+  50% { box-shadow: 0 0 0 4px rgba(245,158,11,0.5), 0 0 16px rgba(245,158,11,0.9); }
+}
+@keyframes locateFlash {
+  0%, 100% { box-shadow: 0 0 0 2px #F59E0B, 0 0 8px rgba(245,158,11,0.6); }
+  50% { box-shadow: 0 0 0 4px rgba(245,158,11,0.3), 0 0 18px rgba(245,158,11,1); }
+}
+.seat .seat-id { font-size: 9px; opacity: .7; line-height: 1; margin-bottom: 1px; }
+.seat .seat-name { font-size: 11px; font-weight: 600; line-height: 1.2; }
+.seat .seat-meta { font-size: 9px; opacity: .85; line-height: 1.2; }
+.seat.drag-over { outline: 2px dashed var(--primary); outline-offset: 2px; }
+/* ===== 右栏：人员列表 ===== */
+#unseatPanel { flex: 1; min-height: 0; }
+#seatPersonPanel { flex: 1; min-height: 0; }
+.search-row { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-direction: column; gap: 4px; }
+.search-row input {
+  padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 12px; width: 100%; outline: none;
+}
+.search-row input:focus { border-color: var(--primary); }
+.list-tools { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.list-tools .btn { flex: 1; padding: 5px 4px; font-size: 11px; }
+table.person-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.person-table th, table.person-table td {
+  padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+table.person-table th { color: var(--text-2); font-weight: 500; background: #FAFBFD; position: sticky; top: 0; }
+table.person-table tr { cursor: pointer; }
+table.person-table tbody tr:hover { background: var(--primary-light); }
+table.person-table tbody tr.selected { background: var(--primary-light); }
+.person-list { overflow-y: auto; flex: 1; min-height: 0; }
+.empty-tip { text-align: center; color: #B0B4C2; padding: 30px 0; font-size: 12px; }
+/* ===== 弹窗 ===== */
+.modal-mask {
+  position: fixed; inset: 0; background: rgba(20,24,40,.4);
+  display: none; align-items: center; justify-content: center; z-index: 100;
+}
+.modal-mask.show { display: flex; }
+.modal {
+  background: #fff; border-radius: 12px; padding: 20px; min-width: 360px;
+  max-width: 90vw; max-height: 85vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,.2);
+}
+.modal h3 { font-size: 15px; margin-bottom: 14px; }
+.form-row { margin-bottom: 10px; }
+.form-row label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 4px; }
+.form-row input, .form-row select {
+  width: 100%; padding: 7px 10px; border: 1px solid var(--border);
+  border-radius: 6px; font-size: 13px; outline: none;
+}
+.form-row input:focus { border-color: var(--primary); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+/* 换座缩略图弹窗 */
+.swap-region-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 10px 0; }
+.swap-region-item {
+  border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+  cursor: pointer; text-align: center; transition: all .15s;
+}
+.swap-region-item:hover { border-color: var(--primary); background: var(--primary-light); }
+/* tooltip */
+.tooltip {
+  position: fixed; background: #1F2333; color: #fff; padding: 10px 12px;
+  border-radius: 8px; font-size: 12px; line-height: 1.6; z-index: 200;
+  pointer-events: none; display: none; max-width: 260px; box-shadow: 0 8px 24px rgba(0,0,0,.2);
+}
+.tooltip .t-name { font-size: 14px; font-weight: 600; }
+/* 菜单 */
+.popover-menu {
+  position: fixed; background: #fff; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15);
+  border: 1px solid var(--border); z-index: 150; overflow: hidden; display: none;
+}
+.popover-menu button {
+  display: block; width: 100%; padding: 8px 16px; background: none; border: none;
+  text-align: left; cursor: pointer; font-size: 13px;
+}
+.popover-menu button:hover { background: var(--primary-light); color: var(--primary); }
+/* toast */
+.toast {
+  position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+  background: #1F2333; color: #fff; padding: 8px 18px; border-radius: 20px;
+  font-size: 13px; z-index: 300; opacity: 0; transition: opacity .2s; pointer-events: none;
+}
+.toast.show { opacity: 1; }
+.hidden { display: none !important; }
+
+/* ===== 全局布局视图 ===== */
+.layout-viewport {
+  position: relative; flex: 1; overflow: hidden; width: 100%;
+  background: #FAFBFD; cursor: default;
+  user-select: none; -webkit-user-select: none;
+}
+.layout-viewport.panning { cursor: grabbing; }
+.layout-canvas {
+  position: absolute; top: 0; left: 0; transform-origin: 0 0;
+  padding: 40px;
+}
+.layout-stage {
+  width: 400px; max-width: 400px; margin: 0 auto 30px;
+}
+.layout-region {
+  position: absolute; background: #fff; border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px; cursor: pointer; transition: border-color .15s;
+}
+.layout-region:hover { border-color: var(--primary); }
+.layout-region.active { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,110,247,.15); }
+.layout-region .lr-label {
+  font-size: 12px; font-weight: 600; margin-bottom: 6px; text-align: center; color: var(--text);
+}
+.layout-seat-grid { display: grid; gap: 3px; }
+.ls {
+  width: 22px; height: 18px; border-radius: 3px; background: #EEF0F5;
+}
+.ls.occ { background: var(--primary); }
+.ls.off { background: var(--disabled); }
+.minimap {
+  position: absolute; right: 14px; bottom: 14px; width: 200px;
+  background: rgba(255,255,255,.95); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px; box-shadow: var(--shadow); z-index: 10;
+}
+.minimap-title { font-size: 10px; color: var(--text-2); text-align: center; margin-bottom: 4px; }
+#minimapCanvas { display: block; width: 188px; height: 128px; background: #F4F5F9; border-radius: 4px; }
+.layout-hint {
+  position: absolute; left: 14px; bottom: 14px; font-size: 11px; color: var(--text-2);
+  background: rgba(255,255,255,.9); padding: 4px 10px; border-radius: 6px; z-index: 10;
+}
+/* 公司性质图例 */
+.legend {
+  position: absolute; left: 14px; top: 14px; background: rgba(255,255,255,.95);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+  font-size: 11px; z-index: 10; box-shadow: var(--shadow);
+}
+.legend .t { font-weight: 600; margin-bottom: 6px; font-size: 11px; }
+.legend .item { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+.legend .dot { width: 10px; height: 10px; border-radius: 3px; }
+/* 三栏拖拽调宽 */
+.col-resizer {
+  width: 5px; cursor: col-resize; background: transparent; flex-shrink: 0;
+  transition: background .15s;
+}
+.col-resizer:hover, .col-resizer.active { background: var(--primary); }
+/* 公司性质配色 */
+.nature-政府 { background: #E5484D !important; border-color: #E5484D !important; }
+.nature-国企 { background: #4F6EF7 !important; border-color: #4F6EF7 !important; }
+.nature-民企 { background: #30A46C !important; border-color: #30A46C !important; }
+.nature-外企 { background: #F59E0B !important; border-color: #F59E0B !important; }
+.nature-其他 { background: #8B5CF6 !important; border-color: #8B5CF6 !important; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>会议座位编辑系统</h1>
+  <span id="dbStatus" style="font-size:11px;color:var(--text-2);margin-left:8px">未连接</span>
+  <div class="spacer"></div>
+  <button class="btn btn-sm" id="userManageBtn" onclick="location.href='/admin.html'">用户管理</button>
+  <button class="btn btn-sm" onclick="downloadTemplate()">下载导入模板</button>
+  <button class="btn btn-sm" onclick="exportImage()">导出座位图</button>
+  <button class="btn btn-sm" onclick="exportLayout()">导出布局备份</button>
+  <button class="btn btn-sm" onclick="document.getElementById('importLayoutFile').click()">导入布局备份</button>
+  <button class="btn btn-sm" onclick="logout()" style="background:#e74c3c;color:#fff;border-color:#e74c3c">退出登录</button>
+  <input type="file" id="importLayoutFile" accept=".json" class="hidden" onchange="importLayout(event)">
+</div>
+
+<div class="main">
+  <!-- 左栏 -->
+  <div class="col-left">
+    <div class="panel" id="regionEditPanel">
+      <div class="panel-head">区域编辑</div>
+      <div class="panel-body region-grid-wrap" id="regionGridWrap"></div>
+    </div>
+    <div class="panel" id="regionPreviewPanel">
+      <div class="panel-head">区域预览</div>
+      <div class="panel-body">
+        <div class="stage-preview">舞 台</div>
+        <div class="preview-row" id="previewRow"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-resizer" id="resizer1"></div>
+
+  <!-- 中栏 -->
+  <div class="col-center">
+  <div class="panel" id="seatPanel">
+    <div class="panel-head">座位编辑 <span id="seatTotalStat" style="margin-left:auto;font-weight:400;color:var(--text-2);font-size:11px"></span></div>
+    <div class="seat-toolbar">
+      <span style="color:var(--text-2);font-size:12px">座位布局：</span>
+      <div class="stepper">
+        <button onclick="adjustDims(-1,'rows')">−</button>
+        <span class="val" id="rowsVal">7</span> 排
+        <button onclick="adjustDims(1,'rows')">＋</button>
+      </div>
+      <div class="stepper">
+        <button onclick="adjustDims(-1,'cols')">−</button>
+        <span class="val" id="colsVal">6</span> 列
+        <button onclick="adjustDims(1,'cols')">＋</button>
+      </div>
+      <button class="btn btn-sm" onclick="confirmDims()">确认</button>
+      <button class="btn btn-sm toggle-edit" id="editModeBtn" onclick="toggleEditMode()">座位编辑模式</button>
+      <button class="btn btn-sm toggle-edit" id="layoutModeBtn" onclick="toggleLayoutMode()">布局视图</button>
+      <button class="btn btn-sm" onclick="openMoveModal()">批量移动</button>
+      <button class="btn btn-sm" onclick="openDisplayModal()">信息显示</button>
+      <div class="spacer" style="flex:1"></div>
+      <span id="statsBar" style="font-size:11px;color:var(--text-2);margin-right:10px"></span>
+      <button class="btn btn-sm btn-danger" onclick="clearRegion()">清空本区域</button>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap" onwheel="seatZoomHandler(event)">
+      <div class="legend" id="legendBox">
+        <div class="t">公司性质图例</div>
+        <div id="legendItems"></div>
+      </div>
+      <div class="stage" id="stageNormal">舞 台</div>
+      <div class="seat-region" id="seatRegion" style="overflow:hidden"></div>
+      <!-- 全局布局视图 -->
+      <div class="layout-viewport hidden" id="layoutViewport">
+        <div class="layout-canvas" id="layoutCanvas">
+          <div class="stage layout-stage">舞 台</div>
+          <div id="layoutRegions"></div>
+        </div>
+        <div class="minimap" id="minimap">
+          <div class="minimap-title">小地图</div>
+          <canvas id="minimapCanvas" width="200" height="140"></canvas>
+        </div>
+        <div class="layout-hint" id="layoutHint">按住空格 + 拖拽平移 · 滚轮缩放</div>
+      </div>
+    </div>
+  </div>
+  </div>
+  <div class="col-resizer" id="resizer2"></div>
+
+  <!-- 右栏 -->
+  <div class="col-right">
+    <div class="panel-tabs">
+      <button class="panel-tab active" data-tab="people" onclick="switchRightTab('people')">人员列表</button>
+      <button class="panel-tab" data-tab="auto" onclick="switchRightTab('auto')">自动排座</button>
+    </div>
+    <div id="rightTabPeople" style="display:flex;flex-direction:column;flex:1;min-height:0">
+    <div class="panel" id="unseatPanel">
+      <div class="panel-head">未入座人员 <span id="unseatCount" style="margin-left:auto;font-weight:400;color:var(--text-2);font-size:11px"></span></div>
+      <div class="search-row">
+        <input type="text" id="searchCompany" placeholder="请输入查询的公司名" oninput="renderUnseated()">
+        <input type="text" id="searchName" placeholder="请输入查询的人员名" oninput="renderUnseated()">
+      </div>
+      <div class="list-tools">
+        <button class="btn btn-primary" onclick="openAddPerson()">添加人员</button>
+        <button class="btn" onclick="document.getElementById('importFile').click()">清单导入</button>
+        <button class="btn btn-danger" onclick="clearUnseated()">清空</button>
+        <input type="file" id="importFile" accept=".xlsx,.xls" class="hidden" onchange="importPeople(event)">
+      </div>
+      <div class="person-list" id="unseatedList"
+        ondragover="event.preventDefault()"
+        ondrop="dropToUnseated(event)">
+        <table class="person-table">
+          <thead><tr><th style="width:30px">#</th><th class="sortable" data-sort="group" onclick="toggleSort('group')">集团 <span class="sort-arrow"></span></th><th class="sortable" data-sort="nature" onclick="toggleSort('nature')">性质 <span class="sort-arrow"></span></th><th class="sortable" data-sort="company" onclick="toggleSort('company')">公司 <span class="sort-arrow"></span></th><th>姓名</th><th>职位</th><th>手机号</th><th>车牌</th></tr></thead>
+          <tbody id="unseatedBody"></tbody>
+        </table>
+        <div class="empty-tip" id="unseatedEmpty">暂无未入座人员，可将座位上的人员拖到此处释放</div>
+      </div>
+    </div>
+    <div class="panel" id="seatPersonPanel">
+      <div class="panel-head">已入座人员 <span id="seatCount" style="margin-left:auto;font-weight:400;color:var(--text-2);font-size:11px"></span></div>
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--border)">
+        <button class="sub-tab active" data-sub="person" onclick="switchSubTab('person')">人员</button>
+        <button class="sub-tab" data-sub="company" onclick="switchSubTab('company')">公司</button>
+      </div>
+      <div id="subPerson" style="flex:1;min-height:0;display:flex;flex-direction:column">
+      <div class="search-row">
+        <input type="text" id="searchCompany2" placeholder="请输入查询的公司名" oninput="renderSeated()">
+        <input type="text" id="searchName2" placeholder="请输入查询的人员名" oninput="renderSeated()">
+      </div>
+      <div class="list-tools">
+        <button class="btn" onclick="exportPeople()">清单导出</button>
+        <button class="btn btn-danger" onclick="clearSeated()">清空入座</button>
+      </div>
+      <div class="person-list">
+        <table class="person-table">
+          <thead><tr><th style="width:30px">#</th><th>座位号</th><th>集团</th><th>性质</th><th>公司</th><th>姓名</th><th>职位</th><th>手机号</th></tr></thead>
+          <tbody id="seatedBody"></tbody>
+        </table>
+        <div class="empty-tip" id="seatedEmpty">暂无已入座人员</div>
+      </div>
+      </div>
+      <div id="subCompany" style="display:none;flex:1;flex-direction:column;min-height:0">
+        <div class="person-list">
+          <table class="person-table">
+            <thead><tr><th>集团</th><th>性质</th><th>公司</th><th style="width:50px">人数</th></tr></thead>
+            <tbody id="companyBody"></tbody>
+          </table>
+          <div class="empty-tip" id="companyEmpty">暂无公司</div>
+        </div>
+      </div>
+    </div>
+    </div>
+    <div id="rightTabAuto" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden">
+      <div class="panel" style="flex-shrink:0">
+        <div class="panel-head" style="cursor:pointer;user-select:none" onclick="toggleAutoSettings()">
+          自动排座设置 <span id="autoSettingsToggle" style="margin-left:auto;font-weight:400">▼</span>
+        </div>
+        <div id="autoSettingsBody" class="panel-body" style="padding:12px">
+          <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+            <div class="form-row" style="flex:1;margin-bottom:0"><label>排座范围</label>
+              <select id="seatScope">
+                <option value="clear" selected>清空重排</option>
+                <option value="unseated">仅排未入座</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-end">
+            <div class="form-row" style="flex:1;margin-bottom:0"><label>座次方式</label>
+              <select id="seatMode">
+                <option value="center">中间为主</option>
+                <option value="left">左侧为主</option>
+              </select>
+            </div>
+            <div class="form-row" style="flex:1;margin-bottom:0"><label>时间(秒)</label><input id="calcTime" type="number" value="20" style="width:100%"></div>
+            <div class="form-row" style="flex:1;margin-bottom:0"><label>线程 <span id="maxThreadsTip"></span></label><input id="threadNum" type="number" value="2" style="width:100%"></div>
+          </div>
+          <div style="font-size:11px;color:var(--text-2);margin-bottom:8px">性质优先级（数字越小越优先）</div>
+          <div id="naturePriorityList" style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-bottom:12px"></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <span style="font-size:12px;color:var(--text-2)">集团优先级</span>
+            <button class="btn btn-sm" onclick="document.getElementById('groupFile').click()">上传xlsx</button>
+            <input type="file" id="groupFile" accept=".xlsx,.xls" class="hidden" onchange="importGroupPriority(event)">
+            <span id="groupPriorityList" style="font-size:11px;color:var(--text-2)"></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <span style="font-size:12px;color:var(--text-2)">区域限定</span>
+            <label class="switch"><input type="checkbox" id="limitRegionChk" onchange="document.getElementById('regionLimitBtn').disabled=!this.checked"><span class="slider"></span></label>
+            <button class="btn btn-sm" id="regionLimitBtn" disabled onclick="openRegionLimitModal()">限定设置</button>
+          </div>
+        </div>
+        <div style="padding:0 12px 12px;display:flex;gap:8px">
+          <button class="btn btn-primary" style="flex:1" onclick="startAutoSeat()">开始自动排座</button>
+          <button class="btn btn-danger" id="stopAutoBtn" style="flex:1;display:none" onclick="stopAutoSeat()">停止</button>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:10px;flex:1;display:flex;flex-direction:column;min-height:0">
+        <div class="panel-head">排座日志</div>
+        <div class="panel-body" style="padding:12px;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden">
+          <div style="margin-bottom:8px;flex-shrink:0">
+            <div style="font-size:12px;margin-bottom:4px">计算进度</div>
+            <div style="background:#E5E6EB;border-radius:4px;height:8px;overflow:hidden">
+              <div id="progressBar" style="background:var(--primary);height:100%;width:0%;transition:width .2s"></div>
+            </div>
+            <div id="progressText" style="font-size:11px;color:var(--text-2);margin-top:4px">等待开始</div>
+          </div>
+          <div id="autoLog" style="font-size:11px;color:var(--text-2);flex:1;min-height:0;overflow-y:auto;margin-bottom:8px"></div>
+          <div style="flex-shrink:0">
+            <div style="font-size:11px;margin-bottom:4px">历史最优 <span id="bestCount" style="color:var(--primary)">0</span> 次修复</div>
+            <input type="range" id="bestSlider" min="0" max="0" value="0" style="width:100%" oninput="previewBest(this.value)">
+            <div id="bestInfo" style="font-size:11px;color:var(--text-2)">暂无最优解</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 区域性质选择弹窗 -->
+<div class="modal-mask" id="pickNatureModal" style="z-index:1001">
+  <div class="modal" style="width:360px">
+    <h3 id="pickNatureTitle">选择允许的性质</h3>
+    <div id="pickNatureList" style="margin:16px 0;display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="closePickNature()">取消</button>
+      <button class="btn btn-primary" onclick="confirmPickNature()">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 区域限定弹窗 -->
+<div class="modal-mask" id="regionLimitModal">
+  <div class="modal" style="width:520px">
+    <h3>区域限定设置</h3>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:12px">为每个区域设置允许排座的人员性质，仅勾选的性质可排入该区域</div>
+    <div id="regionLimitList" style="max-height:400px;overflow-y:auto;margin-bottom:16px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="closeRegionLimitModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveRegionLimit()">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加人员弹窗 -->
+<div class="modal-mask" id="addPersonModal">
+  <div class="modal">
+    <h3>添加人员</h3>
+    <div class="form-row"><label>公司性质</label><input id="f_nature" placeholder="如：政府/国企/民企/外企等"></div>
+    <div class="form-row"><label>所属集团</label><input id="f_group" placeholder="选填"></div>
+    <div class="form-row"><label>公司名称</label><input id="f_company"></div>
+    <div class="form-row"><label>人员姓名</label><input id="f_name"></div>
+    <div class="form-row"><label>职位</label><input id="f_title"></div>
+    <div class="form-row"><label>手机号</label><input id="f_phone" maxlength="11" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+    <div class="form-row"><label>是否驾车</label>
+      <select id="f_driver"><option value="false">否</option><option value="true">是</option></select>
+    </div>
+    <div class="form-row"><label>车牌号</label><input id="f_plate"></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger hidden" id="deletePersonBtn" onclick="deletePerson()">删除</button>
+      <button class="btn" onclick="closeModal('addPersonModal')">取消</button>
+      <button class="btn btn-primary" onclick="savePerson()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新增区域弹窗 -->
+<div class="modal-mask" id="addRegionModal">
+  <div class="modal" style="min-width:380px">
+    <h3>新增区域</h3>
+    <div class="form-row"><label>区域名称</label><input id="fr_name"></div>
+    <div class="form-row">
+      <label>排数</label>
+      <div class="stepper" style="justify-content:space-between">
+        <button onclick="adjustRegionDims(-1,'rows')">−</button>
+        <span class="val" id="fr_rows_val">5</span> 排
+        <button onclick="adjustRegionDims(1,'rows')">＋</button>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>列数</label>
+      <div class="stepper" style="justify-content:space-between">
+        <button onclick="adjustRegionDims(-1,'cols')">−</button>
+        <span class="val" id="fr_cols_val">4</span> 列
+        <button onclick="adjustRegionDims(1,'cols')">＋</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('addRegionModal')">取消</button>
+      <button class="btn btn-primary" onclick="confirmAddRegion()">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 选择人员入座弹窗 -->
+<div class="modal-mask" id="pickPersonModal">
+  <div class="modal" style="min-width:440px;max-width:90vw">
+    <h3 id="pickTitle">选择人员入座</h3>
+    <input type="text" id="pickSearch" placeholder="搜索公司名称..." oninput="renderPickList()"
+      style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none;margin-bottom:10px">
+    <div id="pickList" style="max-height:300px;overflow:auto"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('pickPersonModal')">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 信息显示弹窗 -->
+<div class="modal-mask" id="displayModal">
+  <div class="modal" style="min-width:360px">
+    <h3>座位显示信息</h3>
+    <div id="displayFields" style="margin:12px 0"></div>
+    <div style="text-align:right;margin-top:16px">
+      <button class="btn" onclick="closeModal('displayModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveDisplay()">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 批量移动弹窗 -->
+<div class="modal-mask" id="moveModal">
+  <div class="modal" style="min-width:420px">
+    <h3>批量移动座位</h3>
+    <div id="moveScopeTip" style="font-size:11px;color:var(--text-2);margin-bottom:12px"></div>
+    <div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-weight:600;font-size:12px;margin-bottom:8px">全员纵向移动</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-sm" onclick="doShiftAllRow(-1)">前移1排</button>
+        <button class="btn btn-sm" onclick="doShiftAllRow(1)">后移1排</button>
+        <span style="flex:1"></span>
+        <span>移动</span><input id="shiftRowN" type="number" value="1" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px">排
+      </div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-weight:600;font-size:12px;margin-bottom:8px">全员横向移动</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-sm" onclick="doShiftAllCol(-1)">左移1列</button>
+        <button class="btn btn-sm" onclick="doShiftAllCol(1)">右移1列</button>
+        <span style="flex:1"></span>
+        <span>移动</span><input id="shiftColN" type="number" value="1" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px">列
+      </div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-weight:600;font-size:12px;margin-bottom:8px">指定行移动</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span>第</span><input id="rowNo" type="number" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px">排
+        <button class="btn btn-sm" onclick="doShiftRow(1)">下移</button>
+        <button class="btn btn-sm" onclick="doShiftRow(-1)">上移</button>
+        <span>移动</span><input id="rowShiftN" type="number" value="1" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px">排
+      </div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-weight:600;font-size:12px;margin-bottom:8px">指定列移动</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span>第</span><input id="colNo" type="number" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px">列
+        <button class="btn btn-sm" onclick="doShiftCol(1)">右移</button>
+        <button class="btn btn-sm" onclick="doShiftCol(-1)">左移</button>
+        <span>移动</span><input id="colShiftN" type="number" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px">列
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('moveModal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- Supabase 配置弹窗 -->
+<div class="modal-mask" id="dbConfigModal">
+  <div class="modal">
+    <h3>数据库配置</h3>
+    <div class="form-row"><label>Supabase URL</label><input id="sb_url" placeholder="https://xxxx.supabase.co"></div>
+    <div class="form-row"><label>Supabase anon key</label><input id="sb_key" placeholder="eyJ..."></div>
+    <div class="form-row"><label>房间ID（多个房间可同时使用）</label><input id="sb_room" value="default"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('dbConfigModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveDbConfig()">连接</button>
+    </div>
+  </div>
+</div>
+
+<!-- 确认弹窗 -->
+<div class="modal-mask" id="confirmModal">
+  <div class="modal" style="min-width:320px">
+    <h3 id="confirmTitle">提示</h3>
+    <p id="confirmMsg" style="font-size:13px;color:var(--text-2);line-height:1.6"></p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('confirmModal')">取消</button>
+      <button class="btn btn-primary" id="confirmOkBtn">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 换座弹窗 -->
+<div class="modal-mask" id="swapModal">
+  <div class="modal" style="min-width:520px;max-width:90vw">
+    <h3 id="swapTitle">选择目标座位</h3>
+    <div id="swapRegionList"></div>
+    <div id="swapSeatPicker" class="hidden" style="margin-top:10px"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('swapModal')">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="popover-menu" id="seatMenu">
+  <button onclick="startSwapFromSeat()">换座</button>
+  <button onclick="replacePersonFromSeat()">换人</button>
+  <button onclick="removePersonFromSeat()">删除</button>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ==================== 状态 ====================
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+let state = {
+  regions: [],        // {id,name,rows,cols,gx,gy,seats:[row][col]} seats: null|{off:true}|{personId}
+  people: [],        // {id,company,name,title,phone,driver,plate,seatedAt:{regionId,row,col}|null}
+  selectedRegionId: null,
+  editMode: false,
+  nextLetterIdx: 1,
+  pendingSwapPersonId: null,  // 正在换座的人
+  menuContext: null,           // {regionId,row,col}
+  layoutMode: true,
+  seatZoom: 1.2,
+  seatDisplay: { fields: ['name','company','title'], primary: 'name' },
+  viewScale: 0.6,
+  viewX: 0, viewY: 0,
+  spaceDown: false,
+  panStart: null,
+};
+let uidCounter = 1;
+const uid = () => 'id' + (uidCounter++) + '_' + Date.now().toString(36);
+
+let sbConfig = {url:'', key:'', room:'default'};
+
+function loadDbConfig() {
+  try {
+    const c = JSON.parse(localStorage.getItem('sb_config') || '{}');
+    sbConfig = c;
+  } catch(e) {}
+}
+function openDbConfig() {
+  document.getElementById('sb_url').value = sbConfig.url || '';
+  document.getElementById('sb_key').value = sbConfig.key || '';
+  document.getElementById('sb_room').value = sbConfig.room || 'default';
+  document.getElementById('dbConfigModal').classList.add('show');
+}
+function sbReady() { return sbConfig.url && sbConfig.key; }
+async function sbFetch(path, options) {
+  const headers = Object.assign({
+    'apikey': sbConfig.key,
+    'Authorization': 'Bearer ' + sbConfig.key,
+    'Content-Type': 'application/json'
+  }, options.headers || {});
+  const res = await fetch(sbConfig.url + '/rest/v1' + path, Object.assign({}, options, {headers}));
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error('HTTP ' + res.status + ': ' + txt.substring(0, 200));
+  }
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) return res.json();
+  return null;
+}
+async function saveDbConfig() {
+  sbConfig = {
+    url: document.getElementById('sb_url').value.trim().replace(/\/+$/, ''),
+    key: document.getElementById('sb_key').value.trim(),
+    room: document.getElementById('sb_room').value.trim() || 'default'
+  };
+  localStorage.setItem('sb_config', JSON.stringify(sbConfig));
+  closeModal('dbConfigModal');
+  if (sbConfig.url && sbConfig.key) {
+    setDbStatus('连接中...', '#F59E0B');
+    try {
+      await loadFromDb();
+      renderAll();
+      setDbStatus('已连接', '#30A46C');
+      toast('已连接数据库');
+    } catch(e) {
+      console.error(e);
+      setDbStatus('连接失败', '#E5484D');
+      alert('连接失败：' + e.message);
+    }
+  }
+}
+
+async function loadFromDb() {
+  const rows = await sbFetch('/app_state?room=eq.' + encodeURIComponent(sbConfig.room) + '&select=data', {method: 'GET'});
+  if (rows && rows.length > 0 && rows[0].data) {
+    state = Object.assign(state, rows[0].data);
+  }
+}
+function setDbStatus(text, color) {
+  const el = document.getElementById('dbStatus');
+  el.textContent = text;
+  el.style.color = color || 'var(--text-2)';
+}
+function logout() {
+  if (!confirm('确认退出登录？')) return;
+  localStorage.removeItem('seat_token');
+  localStorage.removeItem('seat_role');
+  localStorage.removeItem('seat_username');
+  location.href = '/';
+}
+async function saveToDb() {
+  if (!sbReady()) return;
+  setDbStatus('保存中...', '#F59E0B');
+  try {
+    // 生成公开位图：只记录座位占用状态，不含人员信息
+    state.publicMap = {
+      regions: state.regions.map(r => ({
+        id: r.id, name: r.name, gx: r.gx, gy: r.gy, rows: r.rows, cols: r.cols,
+        seats: r.seats.map(row => row.map(s => s ? (s.off ? 'off' : 1) : 0))
+      }))
+    };
+    // 写入主状态
+    await sbFetch('/app_state?on_conflict=room', {
+      method: 'POST',
+      headers: {'Prefer': 'resolution=merge-duplicates'},
+      body: JSON.stringify({room: sbConfig.room, data: state, updated_at: new Date().toISOString()})
+    });
+    // 同步人员表（供移动端按手机号查询）
+    const peopleRows = state.people.map(p => ({
+      room: sbConfig.room,
+      phone: p.phone,
+      name: p.name,
+      company: p.company,
+      title: p.title,
+      seated_at: p.seatedAt
+    }));
+    // 先删旧的再插新的（简单粗暴）
+    await sbFetch('/people?room=eq.' + sbConfig.room, {method: 'DELETE'});
+    if (peopleRows.length) {
+      await sbFetch('/people', {
+        method: 'POST',
+        body: JSON.stringify(peopleRows)
+      });
+    }
+    setDbStatus('已保存到云', '#30A46C');
+  } catch(e) {
+    console.warn('save error', e);
+    setDbStatus('保存失败', '#E5484D');
+  }
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem('seatEditor_v1');
+    if (raw) {
+      const s = JSON.parse(raw);
+      state = Object.assign(state, s);
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+function save() {
+  localStorage.setItem('seatEditor_v1', JSON.stringify(state));
+  saveToDb();
+}
+
+// ==================== 初始化 ====================
+async function init() {
+  // 权限判断
+  const userRole = localStorage.getItem('seat_role') || 'admin';
+  if (userRole !== 'admin') {
+    document.getElementById('userManageBtn').style.display = 'none';
+  }
+  loadDbConfig();
+  // 本地无配置时，自动从后端拉取默认 Supabase 配置
+  if (!sbReady()) {
+    try {
+      const r = await fetch('/api/config');
+      if (r.ok) {
+        const c = await r.json();
+        sbConfig = { url: c.url || '', key: c.key || '', room: c.room || 'default' };
+        localStorage.setItem('sb_config', JSON.stringify(sbConfig));
+      }
+    } catch(e) { console.warn('fetch /api/config failed', e); }
+  }
+  if (sbReady()) {
+    setDbStatus('连接中...', '#F59E0B');
+    try {
+      await loadFromDb();
+      setDbStatus('已连接', '#30A46C');
+    } catch(e) {
+      console.warn('auto connect failed', e);
+      setDbStatus('连接失败', '#E5484D');
+    }
+  }
+  if (!state.regions || state.regions.length === 0) {
+    const a = createRegion('A区', 7, 6, 0, 0);
+    state.regions = [a];
+    state.selectedRegionId = a.id;
+    state.nextLetterIdx = 1;
+    state.people = [];
+  }
+  initLayoutEvents();
+  initResizers();
+  // 默认全局视图
+  state.layoutMode = false;
+  toggleLayoutMode();
+  renderAll();
+}
+function createRegion(name, rows, cols, gx, gy) {
+  const seats = [];
+  for (let r = 0; r < rows; r++) {
+    const row = [];
+    for (let c = 0; c < cols; c++) row.push(null);
+    seats.push(row);
+  }
+  return { id: uid(), name, rows, cols, gx, gy, seats };
+}
+function curRegion() { return state.regions.find(r => r.id === state.selectedRegionId); }
+
+// ==================== 渲染：全部 ====================
+function renderAll() {
+  renderRegionGrid();
+  renderPreview();
+  renderSeatCanvas();
+  if (state.layoutMode) renderLayoutView();
+  renderUnseated();
+  renderSeated();
+  renderLegend();
+  renderStats();
+  save();
+}
+function renderStats() {
+  // 当前区域统计
+  const r = curRegion();
+  let regionPeople = 0, regionCompanies = new Set();
+  if (r) {
+    r.seats.forEach(row => row.forEach(s => {
+      if (s && s.personId) {
+        regionPeople++;
+        const p = state.people.find(pp => pp.id === s.personId);
+        if (p) regionCompanies.add(p.company);
+      }
+    }));
+  }
+  // 全场统计
+  const allPeople = state.people.filter(p => p.seatedAt);
+  const allCompanies = new Set(allPeople.map(p => p.company));
+  const totalPeople = allPeople.length;
+  const totalCompanies = allCompanies.size;
+  const regionCount = state.regions.length;
+  // 总座位统计
+  let totalSeats = 0, activeSeats = 0;
+  state.regions.forEach(rg => {
+    for (let i = 0; i < rg.rows; i++)
+      for (let j = 0; j < rg.cols; j++) {
+        totalSeats++;
+        if (!rg.seats[i][j] || !rg.seats[i][j].off) activeSeats++;
+      }
+  });
+  document.getElementById('seatTotalStat').textContent = `可用座位 ${activeSeats}/${totalSeats}`;
+
+  // 工具栏统计
+  const bar = document.getElementById('statsBar');
+  if (state.layoutMode) {
+    bar.innerHTML = `选中区域：${r ? r.name : '-'} ${regionPeople}人/${regionCompanies.size}公司　|　全场：${totalPeople}人/${totalCompanies}公司/${regionCount}区域`;
+  } else {
+    bar.innerHTML = `当前区域：${r ? r.name : '-'} ${regionPeople}人/${regionCompanies.size}公司`;
+  }
+  // 列表统计
+  const unseat = state.people.filter(p => !p.seatedAt);
+  document.getElementById('unseatCount').textContent = `${unseat.length}人 / ${new Set(unseat.map(p=>p.company)).size}公司`;
+  document.getElementById('seatCount').textContent = `${totalPeople}人 / ${totalCompanies}公司`;
+}
+function renderLegend() {
+  state.people.forEach(p => getNatureColor(p.nature));
+  const box = document.getElementById('legendItems');
+  box.innerHTML = '';
+  const activeNatures = [...new Set(state.people.map(p => p.nature).filter(Boolean))];
+  activeNatures.forEach(n => {
+    const item = document.createElement('div');
+    item.className = 'item';
+    item.innerHTML = `<div class="dot" style="background:${getNatureColor(n)}"></div>${esc(n)}`;
+    box.appendChild(item);
+  });
+}
+
+// ==================== 左栏：区域网格 ====================
+function renderRegionGrid() {
+  const wrap = document.getElementById('regionGridWrap');
+  // 计算网格范围，并向外扩展一圈以显示相邻空位的 + 按钮
+  let minX=0,maxX=0,minY=0,maxY=0;
+  state.regions.forEach(r => {
+    minX = Math.min(minX, r.gx); maxX = Math.max(maxX, r.gx);
+    minY = Math.min(minY, r.gy); maxY = Math.max(maxY, r.gy);
+  });
+  minX -= 1; maxX += 1; minY -= 1; maxY += 1;
+  const w = maxX - minX + 1, h = maxY - minY + 1;
+  const grid = document.createElement('div');
+  grid.className = 'region-grid';
+  grid.style.gridTemplateColumns = `repeat(${w}, 84px)`;
+  grid.style.gridTemplateRows = `repeat(${h}, 62px)`;
+
+  // 构建每个格子
+  const cellMap = {};
+  state.regions.forEach(r => {
+    cellMap[r.gy - minY + '_' + (r.gx - minX)] = r;
+  });
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const key = y + '_' + x;
+      const reg = cellMap[key];
+      if (reg) {
+        const div = document.createElement('div');
+        div.className = 'region-cell' + (reg.id === state.selectedRegionId ? ' active' : '');
+        div.textContent = reg.name;
+        div.draggable = true;
+        div.title = '点击选中，拖动换位，双击改名';
+        div.onclick = () => { state.selectedRegionId = reg.id; renderAll(); };
+        div.ondblclick = () => renameRegion(reg);
+        div.ondragstart = (e) => { e.dataTransfer.setData('srcRegion', reg.id); };
+        div.ondragover = (e) => e.preventDefault();
+        div.ondrop = (e) => {
+          e.preventDefault();
+          const srcId = e.dataTransfer.getData('srcRegion');
+          if (srcId && srcId !== reg.id) swapRegionPos(srcId, reg.id);
+        };
+        if (state.regions.length > 1) {
+          const del = document.createElement('span');
+          del.className = 'del'; del.textContent = '×';
+          del.onclick = (e) => { e.stopPropagation(); deleteRegion(reg); };
+          div.appendChild(del);
+        }
+        grid.appendChild(div);
+      } else {
+        // 空位：检查是否相邻于某个区域，若是则显示+号
+        const cx = x + minX, cy = y + minY;
+        const near = state.regions.find(r =>
+          Math.abs(r.gx - cx) + Math.abs(r.gy - cy) === 1
+        );
+        const div = document.createElement('div');
+        if (near) {
+          div.className = 'add-btn'; div.textContent = '+';
+          div.title = '在' + near.name + '旁边添加区域';
+          div.onclick = () => openAddRegion(cx, cy);
+        } else {
+          div.style.width = '78px'; div.style.height = '56px';
+        }
+        // 空位也接收拖放：把区域移到此位置
+        div.ondragover = (e) => e.preventDefault();
+        div.ondrop = (e) => {
+          e.preventDefault();
+          const srcId = e.dataTransfer.getData('srcRegion');
+          if (srcId) {
+            const src = state.regions.find(r => r.id === srcId);
+            if (src && !(src.gx === cx && src.gy === cy)) {
+              // 目标空位若已有区域则交换，否则直接移动
+              const dst = state.regions.find(r => r.gx === cx && r.gy === cy);
+              if (dst) { const tgx=src.gx,tgy=src.gy; src.gx=dst.gx; src.gy=dst.gy; dst.gx=tgx; dst.gy=tgy; }
+              else { src.gx = cx; src.gy = cy; }
+              renderAll();
+            }
+          }
+        };
+        grid.appendChild(div);
+      }
+    }
+  }
+  wrap.innerHTML = '';
+  wrap.appendChild(grid);
+}
+
+function renameRegion(reg) {
+  const n = prompt('修改区域名称：', reg.name);
+  if (n && n.trim()) { reg.name = n.trim(); renderAll(); }
+}
+function deleteRegion(reg) {
+  if (localStorage.getItem('seat_role') !== 'admin') { toast('普通用户无删除权限'); return; }
+  confirmDialog('删除区域', `确定删除「${reg.name}」吗？区域内已入座人员将全部释放回未入座列表。`, () => {
+    // 释放该区域人员
+    reg.seats.forEach(row => row.forEach(s => {
+      if (s && s.personId) {
+        const p = state.people.find(p => p.id === s.personId);
+        if (p) p.seatedAt = null;
+      }
+    }));
+    state.regions = state.regions.filter(r => r.id !== reg.id);
+    if (state.selectedRegionId === reg.id) state.selectedRegionId = state.regions[0].id;
+    renderAll();
+    toast('已删除');
+  });
+}
+function swapRegionPos(srcId, dstId) {
+  const s = state.regions.find(r => r.id === srcId);
+  const d = state.regions.find(r => r.id === dstId);
+  if (!s || !d) return;
+  // 交换位置（网格吸附：只允许相邻交换，或与空位交换）
+  const tgx = s.gx, tgy = s.gy;
+  s.gx = d.gx; s.gy = d.gy;
+  d.gx = tgx; d.gy = tgy;
+  renderAll();
+}
+
+// 新增区域弹窗
+let addRegionPos = {gx:0, gy:0};
+function openAddRegion(gx, gy) {
+  addRegionPos = {gx, gy};
+  document.getElementById('fr_name').value = LETTERS[state.nextLetterIdx % 26] + '区';
+  document.getElementById('fr_rows_val').textContent = 5;
+  document.getElementById('fr_cols_val').textContent = 4;
+  document.getElementById('addRegionModal').classList.add('show');
+}
+function adjustRegionDims(d, key) {
+  const el = document.getElementById(key === 'rows' ? 'fr_rows_val' : 'fr_cols_val');
+  let v = parseInt(el.textContent) + d;
+  v = Math.max(1, Math.min(30, v));
+  el.textContent = v;
+}
+function confirmAddRegion() {
+  const name = document.getElementById('fr_name').value.trim() || (LETTERS[state.nextLetterIdx % 26] + '区');
+  const rows = parseInt(document.getElementById('fr_rows_val').textContent) || 5;
+  const cols = parseInt(document.getElementById('fr_cols_val').textContent) || 4;
+  // 检查位置是否已被占用
+  if (state.regions.find(r => r.gx === addRegionPos.gx && r.gy === addRegionPos.gy)) {
+    toast('该位置已存在区域'); return;
+  }
+  const r = createRegion(name, rows, cols, addRegionPos.gx, addRegionPos.gy);
+  state.regions.push(r);
+  state.selectedRegionId = r.id;
+  state.nextLetterIdx++;
+  closeModal('addRegionModal');
+  renderAll();
+  toast('已添加 ' + name);
+}
+
+// ==================== 左栏：区域预览 ====================
+function renderPreview() {
+  const row = document.getElementById('previewRow');
+  row.innerHTML = '';
+  row.style.display = 'grid';
+  // 计算范围
+  let minX=0,maxX=0,minY=0,maxY=0;
+  state.regions.forEach(r => {
+    minX = Math.min(minX, r.gx); maxX = Math.max(maxX, r.gx);
+    minY = Math.min(minY, r.gy); maxY = Math.max(maxY, r.gy);
+  });
+  const w = maxX - minX + 1, h = maxY - minY + 1;
+  row.style.gridTemplateColumns = `repeat(${w}, 1fr)`;
+  row.style.gap = '6px';
+  const cellMap = {};
+  state.regions.forEach(r => {
+    cellMap[(r.gy-minY)+'_'+(r.gx-minX)] = r;
+  });
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const reg = cellMap[y+'_'+x];
+      const cell = document.createElement('div');
+      if (reg) {
+        cell.className = 'preview-cell' + (reg.id === state.selectedRegionId ? ' active' : '');
+        cell.innerHTML = `<div class="t">${reg.name}</div>`;
+        const g = document.createElement('div');
+        g.className = 'preview-grid';
+        g.style.gridTemplateColumns = `repeat(${reg.cols}, 8px)`;
+        reg.seats.forEach(row => row.forEach(s => {
+          const d = document.createElement('div');
+          d.className = 'preview-seat' + (s && s.off ? ' off' : (s && s.personId ? ' occ' : ''));
+          g.appendChild(d);
+        }));
+        cell.appendChild(g);
+        cell.onclick = () => { state.selectedRegionId = reg.id; renderAll(); };
+      } else {
+        cell.style.visibility = 'hidden';
+      }
+      row.appendChild(cell);
+    }
+  }
+}
+
+// ==================== 中栏：座位画布 ====================
+function adjustDims(d, key) {
+  const r = curRegion(); if (!r) return;
+  if (key === 'rows') r.rows = Math.max(1, Math.min(30, r.rows + d));
+  else r.cols = Math.max(1, Math.min(30, r.cols + d));
+  document.getElementById('rowsVal').textContent = r.rows;
+  document.getElementById('colsVal').textContent = r.cols;
+}
+function confirmDims() {
+  const r = curRegion(); if (!r) return;
+  // 重建座位矩阵，保留已有数据
+  const newSeats = [];
+  for (let i = 0; i < r.rows; i++) {
+    const row = [];
+    for (let j = 0; j < r.cols; j++) {
+      row.push(r.seats[i] && r.seats[i][j] ? r.seats[i][j] : null);
+    }
+    newSeats.push(row);
+  }
+  r.seats = newSeats;
+  renderAll();
+  toast('已更新 ' + r.rows + '排×' + r.cols + '列');
+}
+function toggleEditMode() {
+  state.editMode = !state.editMode;
+  document.getElementById('editModeBtn').classList.toggle('on', state.editMode);
+  renderSeatCanvas();
+}
+function clearRegion() {
+  const r = curRegion(); if (!r) return;
+  confirmDialog('清空本区域', `确定清空「${r.name}」所有已入座人员吗？人员将回到未入座列表。`, () => {
+    for (let i = 0; i < r.rows; i++) {
+      for (let j = 0; j < r.cols; j++) {
+        const s = r.seats[i][j];
+        if (s && s.personId) {
+          const p = state.people.find(p => p.id === s.personId);
+          if (p) p.seatedAt = null;
+        }
+        if (s && !s.off) r.seats[i][j] = null;
+      }
+    }
+    renderAll();
+    toast('已清空');
+  });
+}
+function renderSeatCanvas() {
+  document.getElementById('rowsVal').textContent = curRegion() ? curRegion().rows : '-';
+  document.getElementById('colsVal').textContent = curRegion() ? curRegion().cols : '-';
+  const wrap = document.getElementById('seatRegion');
+  const r = curRegion();
+  wrap.innerHTML = '';
+  if (!r) return;
+  const label = document.createElement('div');
+  label.className = 'region-label';
+  label.textContent = r.name + '（' + r.rows + '排 × ' + r.cols + '列）';
+  wrap.appendChild(label);
+
+  const grid = document.createElement('div');
+  grid.className = 'seat-grid';
+  grid.style.gridTemplateColumns = `repeat(${r.cols}, 76px)`;
+  const z = state.seatZoom || 1.2;
+  wrap.style.transform = `scale(${z})`;
+  wrap.style.transformOrigin = 'top center';
+  for (let i = 0; i < r.rows; i++) {
+    for (let j = 0; j < r.cols; j++) {
+      const s = r.seats[i][j];
+      const div = document.createElement('div');
+      div.className = 'seat';
+      div.dataset.seat = r.id + '-' + i + '-' + j;
+      const seatId = r.name + '-' + (i+1) + '-' + (j+1);
+      if (s && s.off) {
+        div.classList.add('off');
+        div.innerHTML = `<div class="seat-id">${seatId}</div>`;
+      } else if (s && s.personId) {
+        const p = state.people.find(pp => pp.id === s.personId);
+        div.classList.add('occupied');
+        if (p) {
+          div.style.background = getNatureColor(p.nature);
+          div.style.borderColor = getNatureColor(p.nature);
+          if (selectedCompanies.includes(p.company)) {
+            div.classList.add('seat-hl');
+          }
+          div.innerHTML = `<div class="seat-id">${seatId}</div>` + state.seatDisplay.fields.map((f,i) => {
+            const v = f==='name'?p.name:f==='company'?p.company:f==='title'?(p.title||''):(p.group||'');
+            return `<div class="${f===state.seatDisplay.primary?'seat-name':'seat-meta'}">${esc(v)}</div>`;
+          }).join('');
+          div.onmouseenter = (e) => showTooltip(e, p, seatId);
+          div.onmouseleave = hideTooltip;
+          div.draggable = true;
+          div.ondragstart = (e) => {
+            e.dataTransfer.setData('dragPerson', p.id);
+            e.dataTransfer.setData('fromSeat', JSON.stringify({regionId:r.id,row:i,col:j}));
+            hideTooltip();
+          };
+          div.onclick = (e) => openSeatMenu(e, r.id, i, j, p);
+        }
+      } else {
+        div.classList.add('empty');
+        div.innerHTML = `<div class="seat-id">${seatId}</div>`;
+        if (!state.editMode) {
+          div.onclick = () => openPickPerson(r.id, i, j);
+        }
+      }
+      // 公共事件
+      div.ondragover = (e) => { e.preventDefault(); div.classList.add('drag-over'); };
+      div.ondragleave = () => div.classList.remove('drag-over');
+      div.ondrop = (e) => {
+        e.preventDefault();
+        div.classList.remove('drag-over');
+        onSeatDrop(r.id, i, j, e);
+      };
+      if (state.editMode && !(s && s.personId)) {
+        div.onclick = (e) => {
+          e.stopPropagation();
+          r.seats[i][j] = (s && s.off) ? null : {off:true};
+          renderAll();
+        };
+      }
+      grid.appendChild(div);
+    }
+  }
+  wrap.appendChild(grid);
+}
+
+function onSeatDrop(regionId, row, col, ev) {
+  const pId = ev.dataTransfer.getData('dragPerson');
+  if (pId) {
+    const p = state.people.find(pp => pp.id === pId);
+    if (!p) return;
+    placePersonAt(p, regionId, row, col);
+  }
+}
+function placePersonAt(p, regionId, row, col) {
+  const r = state.regions.find(r => r.id === regionId);
+  if (!r) return;
+  const target = r.seats[row][col];
+  if (target && target.off) { toast('该座位已关闭，不可安排'); return; }
+  // 手机号查重
+  if (p.phone) {
+    const dup = state.people.find(pp => pp.phone === p.phone && pp.id !== p.id && pp.seatedAt);
+    if (dup) {
+      const dr = state.regions.find(r => r.id === dup.seatedAt.regionId);
+      const dupSeat = dr ? (dr.name+'-'+(dup.seatedAt.row+1)+'-'+(dup.seatedAt.col+1)) : '';
+      confirmDialog('手机号重复', `该手机号人员已入座「${dupSeat}」（${dup.name}），是否仍要继续入座？`, () => {
+        doPlacePerson(p, regionId, row, col, target);
+      });
+      return;
+    }
+  }
+  doPlacePerson(p, regionId, row, col, target);
+}
+function doPlacePerson(p, regionId, row, col, target) {
+  const r = state.regions.find(r => r.id === regionId);
+  const fromPos = p.seatedAt ? {regionId: p.seatedAt.regionId, row: p.seatedAt.row, col: p.seatedAt.col} : null;
+  if (target && target.personId) {
+    const other = state.people.find(pp => pp.id === target.personId);
+    if (!fromPos) { toast('该座位已有人，请拖到空位'); return; }
+    confirmDialog('交换座位', `${p.name} 与 ${other ? other.name : '该座位人员'}（${r.name}-${row+1}-${col+1}）交换座位？`, () => {
+      const sr = state.regions.find(r => r.id === fromPos.regionId);
+      if (sr) sr.seats[fromPos.row][fromPos.col] = {personId: other.id};
+      other.seatedAt = {regionId: fromPos.regionId, row: fromPos.row, col: fromPos.col};
+      r.seats[row][col] = {personId: p.id};
+      p.seatedAt = {regionId, row, col};
+      renderAll();
+    });
+  } else {
+    if (fromPos) {
+      const sr = state.regions.find(r => r.id === fromPos.regionId);
+      if (sr) sr.seats[fromPos.row][fromPos.col] = null;
+    }
+    r.seats[row][col] = {personId: p.id};
+    p.seatedAt = {regionId, row, col};
+    renderAll();
+  }
+}
+
+// ==================== 座位菜单 ====================
+function openSeatMenu(e, regionId, row, col, p) {
+  e.stopPropagation();
+  state.menuContext = {regionId, row, col, personId: p.id};
+  const menu = document.getElementById('seatMenu');
+  menu.style.display = 'block';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+}
+document.addEventListener('click', () => {
+  document.getElementById('seatMenu').style.display = 'none';
+});
+function startSwapFromSeat() {
+  const ctx = state.menuContext; if (!ctx) return;
+  state.pendingSwapPersonId = ctx.personId;
+  closeModal('seatMenu');
+  document.getElementById('seatMenu').style.display = 'none';
+  openSwapModal();
+}
+function removePersonFromSeat() {
+  const ctx = state.menuContext; if (!ctx) return;
+  const p = state.people.find(pp => pp.id === ctx.personId);
+  document.getElementById('seatMenu').style.display = 'none';
+  if (!p) return;
+  confirmDialog('释放人员', `将 ${p.name} 释放回未入座列表？`, () => {
+    const r = state.regions.find(r => r.id === ctx.regionId);
+    if (r) r.seats[ctx.row][ctx.col] = null;
+    p.seatedAt = null;
+    renderAll();
+  });
+}
+
+// 选择人员入座
+let pickTarget = null; // {regionId, row, col, replacePersonId}
+function openPickPerson(regionId, row, col, replacePersonId) {
+  pickTarget = {regionId, row, col, replacePersonId: replacePersonId || null};
+  document.getElementById('pickTitle').textContent = replacePersonId ? '选择人员替换' : '选择人员入座';
+  document.getElementById('pickSearch').value = '';
+  renderPickList();
+  document.getElementById('pickPersonModal').classList.add('show');
+}
+function renderPickList() {
+  const kw = document.getElementById('pickSearch').value.trim();
+  const box = document.getElementById('pickList');
+  const list = state.people.filter(p => !p.seatedAt && (!kw || p.company.includes(kw)));
+  box.innerHTML = '';
+  if (!list.length) {
+    box.innerHTML = '<div class="empty-tip">暂无未入座人员</div>';
+    return;
+  }
+  list.forEach(p => {
+    const item = document.createElement('div');
+    item.style.cssText = 'padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center';
+    item.onmouseenter = () => item.style.borderColor = 'var(--primary)';
+    item.onmouseleave = () => item.style.borderColor = 'var(--border)';
+    item.innerHTML = `<div><div style="font-weight:600;font-size:13px">${esc(p.name)} <span style="color:var(--text-2);font-weight:400;font-size:11px">${esc(p.title||'')}</span></div><div style="font-size:11px;color:var(--text-2)">${esc(p.company)}</div></div>`;
+    item.onclick = () => {
+      if (pickTarget.replacePersonId) {
+        // 换人：释放原人，新人入座
+        const oldP = state.people.find(pp => pp.id === pickTarget.replacePersonId);
+        if (oldP) oldP.seatedAt = null;
+      }
+      const r = state.regions.find(r => r.id === pickTarget.regionId);
+      r.seats[pickTarget.row][pickTarget.col] = {personId: p.id};
+      p.seatedAt = {regionId: pickTarget.regionId, row: pickTarget.row, col: pickTarget.col};
+      closeModal('pickPersonModal');
+      renderAll();
+    };
+    box.appendChild(item);
+  });
+}
+function replacePersonFromSeat() {
+  const ctx = state.menuContext; if (!ctx) return;
+  document.getElementById('seatMenu').style.display = 'none';
+  openPickPerson(ctx.regionId, ctx.row, ctx.col, ctx.personId);
+}
+
+// ==================== 换座弹窗 ====================
+function openSwapModal() {
+  const p = state.people.find(pp => pp.id === state.pendingSwapPersonId);
+  if (!p) return;
+  document.getElementById('swapTitle').textContent = `为 ${p.name} 选择目标座位`;
+  const list = document.getElementById('swapRegionList');
+  list.innerHTML = '';
+  document.getElementById('swapSeatPicker').classList.add('hidden');
+  state.regions.forEach(r => {
+    const item = document.createElement('div');
+    item.className = 'swap-region-item';
+    item.textContent = r.name + `（${r.rows}×${r.cols}）`;
+    item.onclick = () => showSwapSeatPicker(r.id);
+    list.appendChild(item);
+  });
+  document.getElementById('swapModal').classList.add('show');
+}
+function showSwapSeatPicker(regionId) {
+  const r = state.regions.find(r => r.id === regionId);
+  const picker = document.getElementById('swapSeatPicker');
+  picker.classList.remove('hidden');
+  picker.innerHTML = `<div style="font-size:12px;color:var(--text-2);margin-bottom:6px">${r.name} — 点击目标座位</div>`;
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;gap:4px;grid-template-columns:repeat('+r.cols+',40px)';
+  for (let i = 0; i < r.rows; i++) {
+    for (let j = 0; j < r.cols; j++) {
+      const s = r.seats[i][j];
+      const d = document.createElement('div');
+      d.style.cssText = 'width:40px;height:32px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;border:1px solid var(--border);';
+      if (s && s.off) { d.style.background = 'var(--disabled)'; d.style.cursor='not-allowed'; }
+      else if (s && s.personId) {
+        const op = state.people.find(pp => pp.id === s.personId);
+        d.style.background = 'var(--primary)'; d.style.color = '#fff';
+        d.textContent = op ? op.name[0] : '?';
+      } else {
+        d.style.background = '#fff';
+        d.textContent = (i+1)+'-'+(j+1);
+      }
+      d.onclick = () => confirmSwap(regionId, i, j);
+      grid.appendChild(d);
+    }
+  }
+  picker.appendChild(grid);
+}
+function confirmSwap(regionId, row, col) {
+  const p = state.people.find(pp => pp.id === state.pendingSwapPersonId);
+  if (!p) return;
+  const r = state.regions.find(r => r.id === regionId);
+  const target = r.seats[row][col];
+  if (target && target.off) { toast('该座位已关闭'); return; }
+  if (target && target.personId) {
+    const other = state.people.find(pp => pp.id === target.personId);
+    confirmDialog('交换座位', `${p.name} 与 ${other.name}（${r.name}-${row+1}-${col+1}）交换座位？`, () => {
+      doSwap(p, other, regionId, row, col);
+      closeModal('swapModal');
+    });
+  } else {
+    doSwap(p, null, regionId, row, col);
+    closeModal('swapModal');
+  }
+}
+function doSwap(p, other, regionId, row, col) {
+  // 清除 p 原位置
+  if (p.seatedAt) {
+    const sr = state.regions.find(r => r.id === p.seatedAt.regionId);
+    if (sr) sr.seats[p.seatedAt.row][p.seatedAt.col] = other ? {personId: other.id} : null;
+  }
+  if (other) {
+    other.seatedAt = p.seatedAt;
+  }
+  const r = state.regions.find(r => r.id === regionId);
+  r.seats[row][col] = {personId: p.id};
+  p.seatedAt = {regionId, row, col};
+  state.pendingSwapPersonId = null;
+  renderAll();
+}
+
+// ==================== 右栏：人员列表 ====================
+function renderUnseated() {
+  const kwC = document.getElementById('searchCompany').value.trim();
+  const kwN = document.getElementById('searchName').value.trim();
+  let list = state.people.filter(p => !p.seatedAt
+    && (!kwC || p.company.includes(kwC))
+    && (!kwN || p.name.includes(kwN)));
+  if (sortState.key && sortState.dir) {
+    const np = state.naturePriority || {};
+    list = [...list].sort((a,b) => {
+      let av, bv;
+      if (sortState.key === 'nature') { av = np[a.nature]??99; bv = np[b.nature]??99; }
+      else { av = (a[sortState.key]||''); bv = (b[sortState.key]||''); }
+      if (av < bv) return -1 * sortState.dir;
+      if (av > bv) return 1 * sortState.dir;
+      return 0;
+    });
+  }
+  const body = document.getElementById('unseatedBody');
+  body.innerHTML = '';
+  list.forEach((p, idx) => {
+    const tr = document.createElement('tr');
+    tr.draggable = true;
+    tr.ondragstart = (e) => { e.dataTransfer.setData('dragPerson', p.id); hideTooltip(); };
+    tr.innerHTML = `<td>${idx+1}</td><td>${esc(p.group||'')}</td><td>${natureBadge(p.nature)}</td><td>${esc(p.company)}</td><td>${esc(p.name)}</td><td>${esc(p.title||'')}</td><td>${esc(p.phone||'')}</td><td>${esc(p.plate||'')}</td>`;
+    tr.ondblclick = () => quickSeat(p);
+    tr.onclick = () => openEditPerson(p);
+    body.appendChild(tr);
+  });
+  document.getElementById('unseatedEmpty').style.display = list.length ? 'none' : 'block';
+}
+function renderSeated() {
+  const kwC = document.getElementById('searchCompany2').value.trim();
+  const kwN = document.getElementById('searchName2').value.trim();
+  const list = state.people.filter(p => p.seatedAt
+    && (!kwC || p.company.includes(kwC))
+    && (!kwN || p.name.includes(kwN)));
+  // 按区域顺序
+  list.sort((a,b) => {
+    const ra = state.regions.findIndex(r => r.id === a.seatedAt.regionId);
+    const rb = state.regions.findIndex(r => r.id === b.seatedAt.regionId);
+    if (ra !== rb) return ra - rb;
+    if (a.seatedAt.row !== b.seatedAt.row) return a.seatedAt.row - b.seatedAt.row;
+    return a.seatedAt.col - b.seatedAt.col;
+  });
+  const body = document.getElementById('seatedBody');
+  body.innerHTML = '';
+  list.forEach((p, idx) => {
+    const r = state.regions.find(r => r.id === p.seatedAt.regionId);
+    const seatId = r ? (r.name + '-' + (p.seatedAt.row+1) + '-' + (p.seatedAt.col+1)) : '-';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${idx+1}</td><td class="seat-link" style="color:var(--primary);font-weight:600;cursor:pointer">${seatId}</td><td>${esc(p.group||'')}</td><td>${natureBadge(p.nature)}</td><td>${esc(p.company)}</td><td>${esc(p.name)}</td><td>${esc(p.title||'')}</td><td>${esc(p.phone||'')}</td>`;
+    tr.onclick = () => openEditPerson(p);
+    tr.querySelector('.seat-link').onclick = (e) => { e.stopPropagation(); locatePerson(p); };
+    body.appendChild(tr);
+  });
+  document.getElementById('seatedEmpty').style.display = list.length ? 'none' : 'block';
+}
+function locatePerson(p) {
+  if (!p.seatedAt) return;
+  const r = state.regions.find(r => r.id === p.seatedAt.regionId);
+  if (!r) return;
+  if (state.layoutMode) {
+    state.highlightSeat = {regionId: r.id, row: p.seatedAt.row, col: p.seatedAt.col};
+    renderLayoutView();
+    setTimeout(() => { state.highlightSeat = null; renderLayoutView(); }, 5000);
+    return;
+  }
+  // 主视图：切换到对应区域
+  state.selectedRegionId = r.id;
+  renderAll();
+  setTimeout(() => {
+    const seat = document.querySelector(`[data-seat="${r.id}-${p.seatedAt.row}-${p.seatedAt.col}"]`);
+    if (seat) {
+      seat.classList.add('locate-flash');
+      setTimeout(() => seat.classList.remove('locate-flash'), 2000);
+    }
+  }, 100);
+}
+
+function quickSeat(p) {
+  // 双击未入座人员：找当前区域第一个空位坐下
+  const r = curRegion(); if (!r) { toast('请先选择区域'); return; }
+  for (let i = 0; i < r.rows; i++) {
+    for (let j = 0; j < r.cols; j++) {
+      if (!r.seats[i][j]) {
+        placePersonAt(p, r.id, i, j);
+        return;
+      }
+    }
+  }
+  toast('当前区域无空位');
+}
+
+// ==================== 人员 CRUD ====================
+function openAddPerson() {
+  editingPersonId = null;
+  document.getElementById('addPersonModal').querySelector('h3').textContent = '添加人员';
+  document.getElementById('deletePersonBtn').classList.add('hidden');
+  ['f_nature','f_group','f_company','f_name','f_title','f_phone','f_plate'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f_driver').value = 'false';
+  document.getElementById('addPersonModal').classList.add('show');
+}
+function openEditPerson(p) {
+  editingPersonId = p.id;
+  document.getElementById('addPersonModal').querySelector('h3').textContent = '编辑人员';
+  document.getElementById('deletePersonBtn').classList.remove('hidden');
+  document.getElementById('f_nature').value = p.nature || '';
+  document.getElementById('f_group').value = p.group || '';
+  document.getElementById('f_company').value = p.company;
+  document.getElementById('f_name').value = p.name;
+  document.getElementById('f_title').value = p.title || '';
+  document.getElementById('f_phone').value = p.phone || '';
+  document.getElementById('f_driver').value = p.driver ? 'true' : 'false';
+  document.getElementById('f_plate').value = p.plate || '';
+  document.getElementById('addPersonModal').classList.add('show');
+}
+let editingPersonId = null;
+function savePerson() {
+  const data = {
+    nature: document.getElementById('f_nature').value,
+    group: document.getElementById('f_group').value.trim(),
+    company: document.getElementById('f_company').value.trim(),
+    name: document.getElementById('f_name').value.trim(),
+    title: document.getElementById('f_title').value.trim(),
+    phone: document.getElementById('f_phone').value.trim(),
+    driver: document.getElementById('f_driver').value === 'true',
+    plate: document.getElementById('f_plate').value.trim(),
+  };
+  if (!data.name) { toast('请输入姓名'); return; }
+  if (editingPersonId) {
+    const p = state.people.find(p => p.id === editingPersonId);
+    Object.assign(p, data);
+    toast('已保存修改');
+  } else {
+    state.people.push(Object.assign({id: uid(), seatedAt: null}, data));
+    toast('已添加');
+  }
+  editingPersonId = null;
+  closeModal('addPersonModal');
+  renderAll();
+}
+function deletePerson() {
+  if (!editingPersonId) return;
+  const p = state.people.find(p => p.id === editingPersonId);
+  if (!p) return;
+  if (localStorage.getItem('seat_role') !== 'admin') { toast('普通用户无删除权限'); return; }
+  confirmDialog('删除人员', `确定删除 ${p.name} 吗？已入座的座位将释放。`, () => {
+    if (p.seatedAt) {
+      const r = state.regions.find(r => r.id === p.seatedAt.regionId);
+      if (r) r.seats[p.seatedAt.row][p.seatedAt.col] = null;
+    }
+    state.people = state.people.filter(pp => pp.id !== editingPersonId);
+    editingPersonId = null;
+    closeModal('addPersonModal');
+    renderAll();
+    toast('已删除');
+  });
+}
+function clearUnseated() {
+  const list = state.people.filter(p => !p.seatedAt);
+  if (!list.length) { toast('未入座列表为空'); return; }
+  if (localStorage.getItem('seat_role') !== 'admin') { toast('普通用户无删除权限'); return; }
+  confirmDialog('清空未入座列表', `确定删除 ${list.length} 名未入座人员吗？`, () => {
+    state.people = state.people.filter(p => p.seatedAt);
+    renderAll();
+    toast('已清空');
+  });
+}
+function clearSeated() {
+  const list = state.people.filter(p => p.seatedAt);
+  if (!list.length) { toast('暂无已入座人员'); return; }
+  confirmDialog('清空入座', `确定释放全部 ${list.length} 名已入座人员吗？人员将回到未入座列表。`, () => {
+    state.regions.forEach(r => {
+      for (let i = 0; i < r.rows; i++)
+        for (let j = 0; j < r.cols; j++)
+          if (r.seats[i][j] && !r.seats[i][j].off) r.seats[i][j] = null;
+    });
+    state.people.forEach(p => p.seatedAt = null);
+    renderAll();
+    toast('已清空');
+  });
+}
+
+// ==================== Excel 导入导出 ====================
+function downloadTemplate() {
+  try {
+    if (typeof XLSX === 'undefined') { alert('Excel库未加载，请检查网络后刷新'); return; }
+    const data = [
+      ['座位号(如A-3-5,留空则未入座)','公司性质','所属集团','公司名称','人员姓名','职位','手机号','是否驾车(是/否)','车牌号'],
+      ['A-1-1','民企','','示例科技有限公司','张三','董事长','13800138000','是','京A12345'],
+      ['','国企','示例集团','示例集团有限公司','李四','总经理','13900139000','否','']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [{wch:20},{wch:16},{wch:14},{wch:24},{wch:14},{wch:14},{wch:16},{wch:14},{wch:14}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '人员名单');
+    XLSX.writeFile(wb, '人员导入模板.xlsx');
+    toast('模板已下载');
+  } catch(e) { alert('下载失败：' + e.message); }
+}
+function importPeople(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const wb = XLSX.read(ev.target.result);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1});
+      let n = 0, dup = 0, seated = 0;
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || !row[4]) continue;
+        const seatNo = String(row[0]||'').trim();
+        const nature = String(row[1]||'').trim() || '未分类';
+        const group = String(row[2]||'').trim();
+        const company = String(row[3]||'').trim();
+        const name = String(row[4]||'').trim();
+        const title = String(row[5]||'').trim();
+        const phone = String(row[6]||'').trim();
+        const driver = String(row[7]||'').trim() === '是';
+        const plate = String(row[8]||'').trim();
+        // 手机号查重：重复则不分配座位，放入未入座
+        const isDup = phone && state.people.find(p => p.phone === phone);
+        if (isDup) dup++;
+        const p = {
+          id: uid(), nature, group, company, name, title, phone, driver, plate,
+          seatedAt: null
+        };
+        // 解析座位号（重复手机号不自动入座）
+        if (seatNo && !isDup) {
+          const parts = seatNo.split('-');
+          if (parts.length === 3) {
+            const rname = parts[0];
+            const ri = parseInt(parts[1]) - 1;
+            const ci = parseInt(parts[2]) - 1;
+            // 兼容 "A" 和 "A区" 两种写法
+            const r = state.regions.find(r => r.name === rname || r.name === rname + '区' || r.name.replace(/区$/,'') === rname);
+            if (r && r.seats[ri] && !r.seats[ri][ci]) {
+              r.seats[ri][ci] = {personId: p.id};
+              p.seatedAt = {regionId: r.id, row: ri, col: ci};
+              seated++;
+            }
+          }
+        }
+        state.people.push(p);
+        n++;
+      }
+      renderAll();
+      toast(`已导入 ${n} 人（${seated}人入座，${dup}人手机号重复转为未入座）`);
+    } catch(err) { alert('导入失败：' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+}
+function exportPeople() {
+  try {
+    if (typeof XLSX === 'undefined') { alert('Excel库未加载，请检查网络后刷新'); return; }
+  const list = state.people.filter(p => p.seatedAt);
+  list.sort((a,b) => {
+    const ra = state.regions.findIndex(r => r.id === a.seatedAt.regionId);
+    const rb = state.regions.findIndex(r => r.id === b.seatedAt.regionId);
+    if (ra !== rb) return ra - rb;
+    if (a.seatedAt.row !== b.seatedAt.row) return a.seatedAt.row - b.seatedAt.row;
+    return a.seatedAt.col - b.seatedAt.col;
+  });
+  const data = [['区域','排','列','座位号','公司性质','所属集团','公司名称','人员姓名','职位','手机号','是否驾车','车牌号']];
+  list.forEach(p => {
+    const r = state.regions.find(r => r.id === p.seatedAt.regionId);
+    data.push([
+      r ? r.name : '', p.seatedAt.row+1, p.seatedAt.col+1,
+      r ? (r.name + '-' + (p.seatedAt.row+1) + '-' + (p.seatedAt.col+1)) : '',
+      p.nature || '其他', p.group || '',
+      p.company, p.name, p.title, p.phone, p.driver ? '是' : '否', p.plate
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:8},{wch:6},{wch:6},{wch:14},{wch:12},{wch:14},{wch:24},{wch:14},{wch:14},{wch:16},{wch:10},{wch:14}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '已入座清单');
+  XLSX.writeFile(wb, '已入座人员清单.xlsx');
+  toast('已导出');
+  } catch(e) { alert('导出失败：' + e.message); }
+}
+
+// ==================== 布局备份 ====================
+function exportLayout() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '座位布局备份.json';
+  a.click();
+}
+function importLayout(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      state = JSON.parse(ev.target.result);
+      renderAll();
+      toast('布局已导入');
+    } catch(err) { alert('导入失败：' + err.message); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ==================== 通用 UI ====================
+function esc(s) { return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+// 公司性质动态配色
+const NATURE_PRESET = ['#E5484D','#4F6EF7','#30A46C','#F59E0B','#8B5CF6','#EC4899','#0EA5E9','#F97316','#14B8A6','#6366F1'];
+function getNatureColor(n) {
+  n = n || '未分类';
+  if (!state.natureColorMap) state.natureColorMap = {};
+  if (!state.natureColorMap[n]) {
+    state.natureColorMap[n] = NATURE_PRESET[Object.keys(state.natureColorMap).length % NATURE_PRESET.length];
+  }
+  return state.natureColorMap[n];
+}
+function natureBadge(n) {
+  const c = getNatureColor(n);
+  return `<span style="display:inline-block;padding:1px 6px;border-radius:4px;color:#fff;font-size:10px;background:${c}">${esc(n||'未分类')}</span>`;
+}
+function dropToUnseated(e) {
+  e.preventDefault();
+  const pId = e.dataTransfer.getData('dragPerson');
+  if (!pId) return;
+  const p = state.people.find(pp => pp.id === pId);
+  if (!p || !p.seatedAt) return;
+  confirmDialog('释放人员', `将 ${p.name} 释放回未入座列表？`, () => {
+    const r = state.regions.find(r => r.id === p.seatedAt.regionId);
+    if (r) r.seats[p.seatedAt.row][p.seatedAt.col] = null;
+    p.seatedAt = null;
+    renderAll();
+  });
+}
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function confirmDialog(title, msg, onOk) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMsg').textContent = msg;
+  document.getElementById('confirmModal').classList.add('show');
+  const btn = document.getElementById('confirmOkBtn');
+  btn.onclick = () => { closeModal('confirmModal'); onOk(); };
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+function showTooltip(e, p, seatId) {
+  const tip = document.getElementById('tooltip');
+  tip.innerHTML = `<div class="t-name">${esc(p.name)}</div>
+    <div>性质：${esc(p.nature||'-')}</div>
+    <div>集团：${esc(p.group||'-')}</div>
+    <div>公司：${esc(p.company)}</div>
+    <div>职位：${esc(p.title||'-')}</div>
+    <div>手机：${esc(p.phone||'-')}</div>
+    <div>座位：${seatId}</div>
+    ${p.driver ? `<div>驾车：是（${esc(p.plate||'')}）</div>` : ''}`;
+  tip.style.display = 'block';
+  tip.style.left = Math.min(e.clientX + 12, window.innerWidth - 280) + 'px';
+  tip.style.top = (e.clientY + 12) + 'px';
+}
+function hideTooltip() { document.getElementById('tooltip').style.display = 'none'; }
+
+// ==================== 全局布局视图 ====================
+function toggleLayoutMode() {
+  state.layoutMode = !state.layoutMode;
+  document.getElementById('layoutModeBtn').classList.toggle('on', state.layoutMode);
+  document.getElementById('stageNormal').classList.toggle('hidden', state.layoutMode);
+  document.getElementById('seatRegion').classList.toggle('hidden', state.layoutMode);
+  document.getElementById('layoutViewport').classList.toggle('hidden', !state.layoutMode);
+  document.getElementById('canvasWrap').classList.toggle('full', state.layoutMode);
+  if (state.layoutMode) {
+    fitLayoutView();
+    renderLayoutView();
+  }
+}
+function fitLayoutView() {
+  const vp = document.getElementById('layoutViewport');
+  const vw = vp.clientWidth, vh = vp.clientHeight;
+  // 计算所有区域包围盒
+  let minGx=Infinity,maxGx=-Infinity,minGy=Infinity,maxGy=-Infinity;
+  state.regions.forEach(r => {
+    minGx = Math.min(minGx, r.gx); maxGx = Math.max(maxGx, r.gx);
+    minGy = Math.min(minGy, r.gy); maxGy = Math.max(maxGy, r.gy);
+  });
+  // 每个区域格位约 620px 宽，420px 高（含间距）
+  const contentW = (maxGx - minGx + 1) * 680;
+  const contentH = (maxGy - minGy + 1) * 480 + 200;
+  state.viewScale = Math.min(1.0, Math.min(vw / contentW, vh / contentH));
+  state.viewX = (vw - contentW * state.viewScale) / 2;
+  state.viewY = 40;
+}
+function renderLayoutView() {
+  const canvas = document.getElementById('layoutCanvas');
+  const container = document.getElementById('layoutRegions');
+  container.innerHTML = '';
+  canvas.style.transform = `translate(${state.viewX}px, ${state.viewY}px) scale(${state.viewScale})`;
+
+  let minGx=Infinity,maxGx=-Infinity,minGy=Infinity,maxGy=-Infinity;
+  state.regions.forEach(r => {
+    minGx = Math.min(minGx, r.gx); maxGx = Math.max(maxGx, r.gx);
+    minGy = Math.min(minGy, r.gy); maxGy = Math.max(maxGy, r.gy);
+  });
+  // 按所有区域最大行列数统一卡片尺寸，确保座位完整显示不滚动
+  let maxCols = 0, maxRows = 0;
+  state.regions.forEach(r => { maxCols = Math.max(maxCols, r.cols); maxRows = Math.max(maxRows, r.rows); });
+  const seatW = 76, seatH = 60, gap = 6;
+  const CELL_W = maxCols * seatW + (maxCols-1) * gap + 20;
+  const CELL_H = maxRows * seatH + (maxRows-1) * gap + 50;
+  const GAP = 50;
+  const totalCols = maxGx - minGx + 1;
+  const totalRows = maxGy - minGy + 1;
+  const contentW = totalCols * CELL_W + (totalCols - 1) * GAP;
+  const contentH = totalRows * CELL_H + (totalRows - 1) * GAP + 110;
+  canvas.style.width = contentW + 'px';
+  canvas.style.height = contentH + 'px';
+
+  // 舞台水平居中于所有区域总宽度
+  const stage = canvas.querySelector('.layout-stage');
+  stage.style.width = Math.min(500, contentW * 0.5) + 'px';
+  stage.style.margin = '0 auto 40px';
+  stage.style.position = 'relative';
+  const stageOffset = 90;
+
+  container.style.position = 'relative';
+  container.style.width = contentW + 'px';
+  container.style.height = (contentH - 110) + 'px';
+
+  state.regions.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'layout-region' + (r.id === state.selectedRegionId ? ' active' : '');
+    const px = (r.gx - minGx) * (CELL_W + GAP);
+    const py = (r.gy - minGy) * (CELL_H + GAP) + stageOffset;
+    div.style.left = px + 'px';
+    div.style.top = py + 'px';
+    div.style.width = CELL_W + 'px';
+    div.style.height = CELL_H + 'px';
+    div.style.padding = '10px';
+    div.style.display = 'flex';
+    div.style.flexDirection = 'column';
+    div.style.alignItems = 'center';
+    div.innerHTML = `<div class="lr-label">${r.name}</div>`;
+    // 座位居中，不滚动
+    const g = document.createElement('div');
+    g.className = 'layout-seat-grid';
+    g.style.gridTemplateColumns = `repeat(${r.cols}, 76px)`;
+    g.style.gap = '6px';
+    g.style.margin = 'auto';
+    for (let si = 0; si < r.rows; si++) {
+      for (let sj = 0; sj < r.cols; sj++) {
+        const s = r.seats[si][sj];
+        const seatId = r.name + '-' + (si+1) + '-' + (sj+1);
+        const d = document.createElement('div');
+        d.className = 'seat';
+        d.dataset.seat = r.id + '-' + si + '-' + sj;
+        d.style.width = '76px'; d.style.height = '60px';
+        d.style.overflow = 'hidden';
+        // 高亮定位座位
+        if (state.highlightSeat && state.highlightSeat.regionId === r.id && state.highlightSeat.row === si && state.highlightSeat.col === sj) {
+          d.classList.add('seat-hl');
+        }
+        if (s && s.off) {
+          d.classList.add('off');
+          d.innerHTML = `<div class="seat-id">${seatId}</div>`;
+          if (state.editMode) {
+            d.onclick = () => { r.seats[si][sj] = null; renderAll(); };
+          }
+        } else if (s && s.personId) {
+          const p = state.people.find(pp => pp.id === s.personId);
+          d.classList.add('occupied');
+          if (p) {
+            d.style.background = getNatureColor(p.nature);
+            d.style.borderColor = getNatureColor(p.nature);
+            if (selectedCompanies.includes(p.company)) {
+              d.classList.add('seat-hl');
+            }
+            d.innerHTML = `<div class="seat-id">${seatId}</div>` + state.seatDisplay.fields.map(f => {
+              const v = f==='name'?p.name:f==='company'?p.company:f==='title'?(p.title||''):(p.group||'');
+              return `<div class="${f===state.seatDisplay.primary?'seat-name':'seat-meta'}">${esc(v)}</div>`;
+            }).join('');
+            d.draggable = true;
+            d.ondragstart = (e) => {
+              e.dataTransfer.setData('dragPerson', p.id);
+              e.stopPropagation();
+              hideTooltip();
+            };
+            d.onmouseenter = (e) => { if (!state.spaceDown) showTooltip(e, p, seatId); };
+            d.onmouseleave = hideTooltip;
+            d.onclick = (e) => { e.stopPropagation(); openSeatMenu(e, r.id, si, sj, p); };
+          }
+        } else {
+          d.classList.add('empty');
+          d.innerHTML = `<div class="seat-id">${seatId}</div>`;
+          d.onclick = () => {
+            if (state.editMode) {
+              r.seats[si][sj] = (s && s.off) ? null : {off:true};
+              renderAll();
+            } else {
+              openPickPerson(r.id, si, sj);
+            }
+          };
+        }
+        d.ondragover = (e) => { if (!state.spaceDown) { e.preventDefault(); d.classList.add('drag-over'); } };
+        d.ondragleave = () => d.classList.remove('drag-over');
+        d.ondrop = (e) => {
+          e.preventDefault(); e.stopPropagation();
+          d.classList.remove('drag-over');
+          onSeatDrop(r.id, si, sj, e);
+        };
+        g.appendChild(d);
+      }
+    }
+    div.appendChild(g);
+    div.onclick = () => {
+      state.selectedRegionId = r.id;
+      renderAll();
+    };
+    container.appendChild(div);
+  });
+  drawMinimap(minGx, maxGx, minGy, maxGy, CELL_W, CELL_H, GAP);
+}
+// 小地图参数缓存
+let mmParams = {offX:0, offY:0, scale:1, contentW:0, contentH:0};
+function drawMinimap(minGx, maxGx, minGy, maxGy, CELL_W, CELL_H, GAP) {
+  const cv = document.getElementById('minimapCanvas');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const contentW = (maxGx - minGx + 1) * (CELL_W + GAP);
+  const contentH = (maxGy - minGy + 1) * (CELL_H + GAP) + 110;
+  const scale = Math.min((W-10)/contentW, (H-10)/contentH);
+  const offX = (W - contentW*scale)/2;
+  const offY = (H - contentH*scale)/2;
+  mmParams = {offX, offY, scale, contentW, contentH};
+  // 舞台固定在小地图顶部居中
+  ctx.fillStyle = '#2D3142';
+  const sw = W * 0.5;
+  ctx.fillRect((W - sw)/2, 6, sw, 14);
+  // 画区域（在舞台下方）
+  state.regions.forEach(r => {
+    const px = offX + (r.gx - minGx)*(CELL_W+GAP)*scale;
+    const py = offY + 28 + (r.gy - minGy)*(CELL_H+GAP)*scale;
+    ctx.fillStyle = r.id === state.selectedRegionId ? '#4F6EF7' : '#C8CBD6';
+    ctx.fillRect(px, py, CELL_W*scale, CELL_H*scale*0.6);
+  });
+  // 画视口框
+  const vp = document.getElementById('layoutViewport');
+  const vw = vp.clientWidth, vh = vp.clientHeight;
+  ctx.strokeStyle = '#E5484D';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(
+    offX - state.viewX/state.viewScale*scale,
+    offY - state.viewY/state.viewScale*scale,
+    vw/state.viewScale*scale,
+    vh/state.viewScale*scale
+  );
+}
+// 缩放/平移事件
+function initLayoutEvents() {
+  const vp = document.getElementById('layoutViewport');
+  vp.addEventListener('wheel', (e) => {
+    if (!state.layoutMode) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.max(0.2, Math.min(2.5, state.viewScale * delta));
+    // 以鼠标为中心缩放
+    const rect = vp.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const ratio = newScale / state.viewScale;
+    state.viewX = mx - (mx - state.viewX) * ratio;
+    state.viewY = my - (my - state.viewY) * ratio;
+    state.viewScale = newScale;
+    renderLayoutView();
+  }, {passive:false});
+  vp.addEventListener('mousedown', (e) => {
+    if (!state.layoutMode || !state.spaceDown) return;
+    state.panStart = {x: e.clientX, y: e.clientY, vx: state.viewX, vy: state.viewY};
+    vp.classList.add('panning');
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!state.panStart) return;
+    state.viewX = state.panStart.vx + (e.clientX - state.panStart.x);
+    state.viewY = state.panStart.vy + (e.clientY - state.panStart.y);
+    renderLayoutView();
+  });
+  document.addEventListener('mouseup', () => {
+    state.panStart = null;
+    vp.classList.remove('panning');
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
+      state.spaceDown = true;
+      e.preventDefault();
+    }
+  });
+  document.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') state.spaceDown = false;
+  });
+  // 小地图点击/拖动平移
+  const mm = document.getElementById('minimapCanvas');
+  function mmJump(e) {
+    const rect = mm.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    // 换算成全图坐标
+    const fullX = (mx - mmParams.offX) / mmParams.scale;
+    const fullY = (my - mmParams.offY) / mmParams.scale;
+    const vp = document.getElementById('layoutViewport');
+    state.viewX = vp.clientWidth/2 - fullX * state.viewScale;
+    state.viewY = vp.clientHeight/2 - fullY * state.viewScale;
+    renderLayoutView();
+  }
+  mm.addEventListener('mousedown', (e) => {
+    mmJump(e);
+    const move = (ev) => mmJump(ev);
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+}
+
+// 导出座位图为图片（后台离屏渲染，不切换视图）
+function exportImage() {
+  if (typeof html2canvas === 'undefined') { alert('截图库未加载，请检查网络后刷新'); return; }
+  toast('正在生成图片...');
+  try {
+  const offscreen = document.createElement('div');
+  offscreen.style.cssText = 'position:fixed;left:0;top:0;background:#fff;padding:40px;width:max-content;z-index:99999;pointer-events:none;';
+  // 标题
+  const title = document.createElement('div');
+  title.style.cssText = 'text-align:center;font-size:22px;font-weight:700;margin-bottom:20px;color:#1F2333';
+  title.textContent = '会议座位安排图';
+  offscreen.appendChild(title);
+  // 区域容器
+  let minGx=Infinity,maxGx=-Infinity,minGy=Infinity,maxGy=-Infinity;
+  state.regions.forEach(r => {
+    minGx = Math.min(minGx, r.gx); maxGx = Math.max(maxGx, r.gx);
+    minGy = Math.min(minGy, r.gy); maxGy = Math.max(maxGy, r.gy);
+  });
+  let maxCols0=0, maxRows0=0;
+  state.regions.forEach(r => { maxCols0=Math.max(maxCols0,r.cols); maxRows0=Math.max(maxRows0,r.rows); });
+  const CELL_W = maxCols0*82+20, CELL_H = maxRows0*66+50, GAP = 50;
+  const contentW = (maxGx-minGx+1)*CELL_W + (maxGx-minGx)*GAP;
+  offscreen.style.width = contentW + 'px';
+  // 舞台居中于内容宽度
+  const stage = document.createElement('div');
+  stage.style.cssText = 'width:'+Math.min(500, contentW*0.5)+'px;margin:0 auto 30px;background:#2D3142;color:#fff;text-align:center;padding:12px;border-radius:8px;letter-spacing:6px;font-size:14px';
+  stage.textContent = '舞 台';
+  offscreen.appendChild(stage);
+  const regionsBox = document.createElement('div');
+  regionsBox.style.cssText = 'position:relative;width:' + ((maxGx-minGx+1)*CELL_W + (maxGx-minGx)*GAP) + 'px;height:' + ((maxGy-minGy+1)*CELL_H + (maxGy-minGy)*GAP) + 'px';
+  state.regions.forEach(r => {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:absolute;left:' + ((r.gx-minGx)*(CELL_W+GAP)) + 'px;top:' + ((r.gy-minGy)*(CELL_H+GAP)) + 'px;width:' + CELL_W + 'px;height:' + CELL_H + 'px;background:#fff;border:1px solid #E3E5EC;border-radius:10px;padding:10px;display:flex;flex-direction:column;align-items:center';
+    box.innerHTML = '<div style="font-size:14px;font-weight:600;margin-bottom:8px">' + r.name + '</div>';
+    const g = document.createElement('div');
+    g.style.cssText = 'display:grid;grid-template-columns:repeat(' + r.cols + ',76px);gap:6px;flex:1;align-content:center';
+    for (let si = 0; si < r.rows; si++) {
+      for (let sj = 0; sj < r.cols; sj++) {
+        const s = r.seats[si][sj];
+        const seatId = r.name + '-' + (si+1) + '-' + (sj+1);
+        const d = document.createElement('div');
+        d.style.cssText = 'width:76px;height:60px;border-radius:8px;border:1px solid #E3E5EC;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px;text-align:center;overflow:hidden;font-family:sans-serif';
+        if (s && s.off) {
+          d.style.background = '#C8CBD6';
+          d.innerHTML = '<div style="font-size:9px;opacity:.7">' + seatId + '</div>';
+        } else if (s && s.personId) {
+          const p = state.people.find(pp => pp.id === s.personId);
+          const c = getNatureColor(p.nature);
+          d.style.background = c;
+          d.style.color = '#fff';
+          d.style.borderColor = c;
+          d.innerHTML = '<div style="font-size:9px;opacity:.7;line-height:1">' + seatId + '</div><div style="font-size:11px;font-weight:600;line-height:1.2">' + esc(p.name) + '</div><div style="font-size:9px;opacity:.85;line-height:1.2">' + esc(p.company) + '</div><div style="font-size:9px;opacity:.85;line-height:1.2">' + esc(p.title||'') + '</div>';
+        } else {
+          d.style.background = '#fff';
+          d.innerHTML = '<div style="font-size:9px;opacity:.5">' + seatId + '</div>';
+        }
+        g.appendChild(d);
+      }
+    }
+    box.appendChild(g);
+    regionsBox.appendChild(box);
+  });
+  offscreen.appendChild(regionsBox);
+  // 图例
+  const legend = document.createElement('div');
+  legend.style.cssText = 'margin-top:20px;display:flex;gap:16px;justify-content:center;font-size:12px;flex-wrap:wrap';
+  Object.keys(state.natureColorMap || {}).forEach(n => {
+    legend.innerHTML += '<span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:3px;background:'+state.natureColorMap[n]+'"></span>'+esc(n)+'</span>';
+  });
+  offscreen.appendChild(legend);
+  document.body.appendChild(offscreen);
+  html2canvas(offscreen, {backgroundColor: '#ffffff', scale: 2, useCORS: true}).then(canvas => {
+    document.body.removeChild(offscreen);
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = '会议座位图.png';
+    a.click();
+    toast('已导出');
+  }).catch(err => {
+    if (document.body.contains(offscreen)) document.body.removeChild(offscreen);
+    alert('导出失败：' + err.message);
+  });
+  } catch(err) { alert('导出出错：' + err.message); }
+}
+
+// 三栏拖拽调宽
+function initResizers() {
+  const r1 = document.getElementById('resizer1');
+  const r2 = document.getElementById('resizer2');
+  const left = document.querySelector('.col-left');
+  const right = document.querySelector('.col-right');
+  function startDrag(which, e) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = which === 1 ? left.offsetWidth : right.offsetWidth;
+    document.querySelectorAll('.col-resizer').forEach(el => el.classList.add('active'));
+    function onMove(ev) {
+      const dx = ev.clientX - startX;
+      if (which === 1) left.style.width = Math.max(200, startW + dx) + 'px';
+      else right.style.width = Math.max(260, startW - dx) + 'px';
+    }
+    function onUp() {
+      document.querySelectorAll('.col-resizer').forEach(el => el.classList.remove('active'));
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+  r1.addEventListener('mousedown', (e) => startDrag(1, e));
+  r2.addEventListener('mousedown', (e) => startDrag(2, e));
+}
+
+// 批量移动
+function openMoveModal() {
+  document.getElementById('moveScopeTip').textContent = state.layoutMode
+    ? '当前为全局视图：以下操作影响整个会场的所有区域'
+    : '当前为主视图：以下操作仅影响当前区域';
+  document.getElementById('moveModal').classList.add('show');
+}
+function targetRegions() {
+  return state.layoutMode ? state.regions : [curRegion()];
+}
+function releasePerson(p) { p.seatedAt = null; }
+function doShiftAllRow(dir) {
+  const n = parseInt(document.getElementById('shiftRowN').value) || 1;
+  const offset = dir * n;
+  confirmDialog('全员纵向移动', `确定将${state.layoutMode?'全场':'当前区域'}所有人${offset>0?'后移':'前移'}${Math.abs(offset)}排？超出边界的人员将放入未入座列表。`, () => {
+    targetRegions().forEach(r => {
+      const newSeats = [];
+      for (let i = 0; i < r.rows; i++) {
+        const row = [];
+        for (let j = 0; j < r.cols; j++) {
+          const src = i - offset;
+          if (src >= 0 && src < r.rows) {
+            const s = r.seats[src][j];
+            row.push(s && s.off ? {off:true} : (s && s.personId ? {personId: s.personId} : null));
+          } else {
+            row.push(null);
+          }
+        }
+        newSeats.push(row);
+      }
+      // 更新人员位置
+      for (let i = 0; i < r.rows; i++)
+        for (let j = 0; j < r.cols; j++) {
+          const s = r.seats[i][j];
+          if (s && s.personId) {
+            const p = state.people.find(pp => pp.id === s.personId);
+            if (p) releasePerson(p);
+          }
+        }
+      r.seats = newSeats;
+      for (let i = 0; i < r.rows; i++)
+        for (let j = 0; j < r.cols; j++) {
+          const s = r.seats[i][j];
+          if (s && s.personId) {
+            const p = state.people.find(pp => pp.id === s.personId);
+            if (p) p.seatedAt = {regionId: r.id, row: i, col: j};
+          }
+        }
+    });
+    renderAll();
+    toast('已完成');
+  });
+}
+function doShiftAllCol(dir) {
+  const n = parseInt(document.getElementById('shiftColN').value) || 1;
+  const offset = dir * n;
+  confirmDialog('全员横向移动', `确定将${state.layoutMode?'全场':'当前区域'}所有人${offset>0?'右移':'左移'}${Math.abs(offset)}列？超出边界的人员将放入未入座列表。`, () => {
+    targetRegions().forEach(r => {
+      const newSeats = [];
+      for (let i = 0; i < r.rows; i++) {
+        const row = [];
+        for (let j = 0; j < r.cols; j++) {
+          const src = j - offset;
+          if (src >= 0 && src < r.cols) {
+            const s = r.seats[i][src];
+            row.push(s && s.off ? {off:true} : (s && s.personId ? {personId: s.personId} : null));
+          } else row.push(null);
+        }
+        newSeats.push(row);
+      }
+      for (let i = 0; i < r.rows; i++)
+        for (let j = 0; j < r.cols; j++) {
+          const s = r.seats[i][j];
+          if (s && s.personId) { const p = state.people.find(pp => pp.id === s.personId); if (p) releasePerson(p); }
+        }
+      r.seats = newSeats;
+      for (let i = 0; i < r.rows; i++)
+        for (let j = 0; j < r.cols; j++) {
+          const s = r.seats[i][j];
+          if (s && s.personId) { const p = state.people.find(pp => pp.id === s.personId); if (p) p.seatedAt = {regionId: r.id, row: i, col: j}; }
+        }
+    });
+    renderAll();
+    toast('已完成');
+  });
+}
+function doShiftRow(dir) {
+  const rowNo = (parseInt(document.getElementById('rowNo').value) || 1) - 1;
+  const n = parseInt(document.getElementById('rowShiftN').value) || 1;
+  const offset = dir * n;
+  const r = curRegion(); if (!r) return;
+  if (rowNo < 0 || rowNo >= r.rows) { toast('行号超出范围'); return; }
+  confirmDialog('指定行移动', `确定将第${rowNo+1}排整体${offset>0?'下':'上'}移${Math.abs(offset)}排？被挤到边界外的人员将放入未入座列表。`, () => {
+    // 取出该行
+    const rowData = r.seats[rowNo].map(s => s ? JSON.parse(JSON.stringify(s)) : null);
+    // 清空该行
+    r.seats[rowNo] = new Array(r.cols).fill(null);
+    // 逐格放置
+    for (let j = 0; j < r.cols; j++) {
+      const s = rowData[j];
+      if (!s || s.off) continue;
+      let target = rowNo + offset;
+      // 链式顺移
+      while (target >= 0 && target < r.rows) {
+        const cur = r.seats[target][j];
+        if (!cur) {
+          r.seats[target][j] = {personId: s.personId};
+          const p = state.people.find(pp => pp.id === s.personId);
+          if (p) p.seatedAt = {regionId: r.id, row: target, col: j};
+          break;
+        } else if (cur.personId) {
+          // 交换，继续挤
+          const tmpId = cur.personId;
+          r.seats[target][j] = {personId: s.personId};
+          const p1 = state.people.find(pp => pp.id === s.personId);
+          if (p1) p1.seatedAt = {regionId: r.id, row: target, col: j};
+          s.personId = tmpId;
+          target += offset;
+        } else {
+          break;
+        }
+      }
+      // 超出边界，释放
+      if (target < 0 || target >= r.rows) {
+        const p = state.people.find(pp => pp.id === s.personId);
+        if (p) releasePerson(p);
+      }
+    }
+    renderAll();
+    toast('已完成');
+  });
+}
+function doShiftCol(dir) {
+  const colNo = (parseInt(document.getElementById('colNo').value) || 1) - 1;
+  const n = parseInt(document.getElementById('colShiftN').value) || 1;
+  const offset = dir * n;
+  const r = curRegion(); if (!r) return;
+  if (colNo < 0 || colNo >= r.cols) { toast('列号超出范围'); return; }
+  confirmDialog('指定列移动', `确定将第${colNo+1}列整体${offset>0?'右':'左'}移${Math.abs(offset)}列？被挤到边界外的人员将放入未入座列表。`, () => {
+    const colData = [];
+    for (let i = 0; i < r.rows; i++) colData.push(r.seats[i][colNo] ? JSON.parse(JSON.stringify(r.seats[i][colNo])) : null);
+    for (let i = 0; i < r.rows; i++) r.seats[i][colNo] = null;
+    for (let i = 0; i < r.rows; i++) {
+      const s = colData[i];
+      if (!s || s.off) continue;
+      let target = colNo + offset;
+      while (target >= 0 && target < r.cols) {
+        const cur = r.seats[i][target];
+        if (!cur) {
+          r.seats[i][target] = {personId: s.personId};
+          const p = state.people.find(pp => pp.id === s.personId);
+          if (p) p.seatedAt = {regionId: r.id, row: i, col: target};
+          break;
+        } else if (cur.personId) {
+          const tmpId = cur.personId;
+          r.seats[i][target] = {personId: s.personId};
+          const p1 = state.people.find(pp => pp.id === s.personId);
+          if (p1) p1.seatedAt = {regionId: r.id, row: i, col: target};
+          s.personId = tmpId;
+          target += offset;
+        } else break;
+      }
+      if (target < 0 || target >= r.cols) {
+        const p = state.people.find(pp => pp.id === s.personId);
+        if (p) releasePerson(p);
+      }
+    }
+    renderAll();
+    toast('已完成');
+  });
+}
+
+// ===== 自动排座 =====
+let groupPriority = {};
+let regionLimitConfig = {}; // regionId -> [允许的性质数组]
+
+function switchRightTab(tab) {
+  document.querySelectorAll('.panel-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('rightTabPeople').style.display = tab === 'people' ? 'flex' : 'none';
+  document.getElementById('rightTabAuto').style.display = tab === 'auto' ? 'flex' : 'none';
+  if (tab === 'auto') {
+    renderNaturePriority();
+    const maxT = navigator.hardwareConcurrency || 4;
+    document.getElementById('maxThreadsTip').textContent = `(最大${maxT})`;
+    document.getElementById('threadNum').max = maxT;
+  }
+}
+
+function renderNaturePriority() {
+  const natures = [...new Set(state.people.map(p => p.nature).filter(Boolean))];
+  const box = document.getElementById('naturePriorityList');
+  box.innerHTML = natures.map(n =>
+    `<div style="display:flex;align-items:center;gap:4px">
+      <span style="flex:1;font-size:12px">${n}</span>
+      <input type="number" data-nature="${n}" value="${state.naturePriority?.[n] ?? 99}" style="width:44px;padding:2px;border:1px solid var(--border);border-radius:4px;font-size:12px">
+    </div>`
+  ).join('');
+}
+
+let allNatures = [];
+function openRegionLimitModal() {
+  allNatures = [...new Set(state.people.map(p => p.nature).filter(Boolean))];
+  // 按区域编辑的 gx/gy 排列
+  const box = document.getElementById('regionLimitList');
+  // 计算布局范围
+  const minX = Math.min(...state.regions.map(r => r.gx));
+  const minY = Math.min(...state.regions.map(r => r.gy));
+  const maxX = Math.max(...state.regions.map(r => r.gx));
+  const maxY = Math.max(...state.regions.map(r => r.gy));
+  box.style.display = 'grid';
+  box.style.gridTemplateColumns = `repeat(${maxX - minX + 1}, 1fr)`;
+  box.style.gap = '10px';
+  box.innerHTML = state.regions.map(r => {
+    const allowed = regionLimitConfig[r.id] || [];
+    return `<div class="region-limit-card" data-region="${r.id}" style="
+        border:1px solid var(--border);border-radius:8px;padding:16px;min-height:90px;cursor:pointer;
+        grid-column:${r.gx - minX + 1};grid-row:${r.gy - minY + 1};text-align:center;
+      " onclick="pickNaturesForRegion('${r.id}')">
+      <div style="font-weight:600;margin-bottom:8px">${r.name}</div>
+      <div style="font-size:12px;color:var(--text-2)">${allowed.join('<br>') || '<span style="color:#C8CBD6">点击设置</span>'}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('regionLimitModal').classList.add('show');
+}
+function pickNaturesForRegion(regionId) {
+  pickNatureRegionId = regionId;
+  const r = state.regions.find(r => r.id === regionId);
+  document.getElementById('pickNatureTitle').textContent = `设置 ${r.name} 允许的性质`;
+  const allowed = regionLimitConfig[regionId] || [];
+  document.getElementById('pickNatureList').innerHTML = allNatures.map(n =>
+    `<label style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:6px;cursor:pointer">
+      <input type="checkbox" value="${n}" ${allowed.includes(n)?'checked':''}> ${n}
+    </label>`
+  ).join('');
+  document.getElementById('pickNatureModal').classList.add('show');
+}
+function closePickNature() { document.getElementById('pickNatureModal').classList.remove('show'); }
+function confirmPickNature() {
+  const checked = [...document.querySelectorAll('#pickNatureList input:checked')].map(i => i.value);
+  regionLimitConfig[pickNatureRegionId] = checked;
+  closePickNature();
+  openRegionLimitModal();
+}
+function closeRegionLimitModal() { document.getElementById('regionLimitModal').classList.remove('show'); }
+function saveRegionLimit() {
+  closeRegionLimitModal();
+  toast('区域限定已保存');
+}
+
+function importGroupPriority(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const wb = XLSX.read(ev.target.result);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1});
+    groupPriority = {};
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i] && rows[i][0]) groupPriority[String(rows[i][0]).trim()] = parseInt(rows[i][1]) || 99;
+    }
+    document.getElementById('groupPriorityList').textContent = `已加载 ${Object.keys(groupPriority).length} 个集团优先级`;
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+}
+
+// 生成整个会场的座位序列（按中间为主/左侧为主排序）
+function getVenueSeatSequence(mode) {
+  // 按区域编辑的 gy 分行，同一 gy 的区域算同一排
+  const rows = {};
+  const minX = Math.min(...state.regions.map(r => r.gx));
+  const minY = Math.min(...state.regions.map(r => r.gy));
+  // 先计算每个区域的全局 x 偏移（按 gx 排序累加列数+间距）
+  const sortedRegions = [...state.regions].sort((a,b) => a.gx - b.gx || a.gy - b.gy);
+  const regionX = {};
+  // 按行分组计算每个区域的 x 偏移
+  const rowGroups = {};
+  state.regions.forEach(r => {
+    const ry = r.gy - minY;
+    if (!rowGroups[ry]) rowGroups[ry] = [];
+    rowGroups[ry].push(r);
+  });
+  // 每行内按 gx 排序，计算全局 x
+  Object.keys(rowGroups).forEach(ry => {
+    rowGroups[ry].sort((a,b) => a.gx - b.gx);
+    let offset = 0;
+    rowGroups[ry].forEach(r => {
+      regionX[r.id] = offset;
+      offset += r.cols + 2; // 2列间距
+    });
+  });
+
+  state.regions.forEach(r => {
+    const my = r.gy - minY;
+    for (let i = 0; i < r.rows; i++) {
+      const rowKey = my * 1000 + i;
+      if (!rows[rowKey]) rows[rowKey] = [];
+      for (let j = 0; j < r.cols; j++) {
+        if (r.seats[i][j] && r.seats[i][j].off) continue;
+        rows[rowKey].push({
+          regionId: r.id, row: i, col: j,
+          globalX: regionX[r.id] + j
+        });
+      }
+    }
+  });
+
+  const rowKeys = Object.keys(rows).map(Number).sort((a,b) => a-b);
+  const result = [];
+  for (const key of rowKeys) {
+    const rowSeats = rows[key];
+    if (mode === 'center') {
+      // 中间为主：从行中间往两侧排
+      const xs = rowSeats.map(s => s.globalX).sort((a,b) => a-b);
+      const center = (xs[0] + xs[xs.length-1]) / 2;
+      rowSeats.sort((a,b) => Math.abs(a.globalX - center) - Math.abs(b.globalX - center));
+    } else {
+      rowSeats.sort((a,b) => a.globalX - b.globalX);
+    }
+    result.push(...rowSeats);
+  }
+  return result;
+}
+
+// 计算两个座位之间的"距离"（同公司聚集度评分）
+function seatDist(s1, s2) {
+  if (s1.regionId !== s2.regionId) return 999;
+  // 同排相邻：权重10
+  if (s1.row === s2.row) return Math.abs(s1.col - s2.col) * 0.1;
+  // 正后方/正前方：权重3
+  if (s1.col === s2.col && Math.abs(s1.row - s2.row) === 1) return 0.33;
+  // 前后斜向：惩罚
+  if (Math.abs(s1.row - s2.row) === 1) return Math.abs(s1.col - s2.col) + 3;
+  return 999;
+}
+
+// 找连续空位块：从startIdx开始找count个连续空座位
+function findConsecutiveSeats(emptySeats, count, startIdx) {
+  for (let i = startIdx; i <= emptySeats.length - count; i++) {
+    let ok = true;
+    for (let j = 0; j < count; j++) {
+      const a = emptySeats[i+j], b = emptySeats[i+j-1];
+      if (j > 0 && a.regionId === b.regionId && a.row === b.row && Math.abs(a.col - b.col) !== 1) { ok = false; break; }
+      if (j > 0 && a.regionId !== b.regionId) { ok = false; break; }
+    }
+    if (ok) return i;
+  }
+  return -1;
+}
+
+let allSeats = [];
+let seatIndexMap = {};
+let personMap = {};
+let natureSeatRange = {};
+function calcCost(assign) {
+  const wPos = 5.0, wCo = 10.0, wGroup = 3.0;
+  let cost = 0;
+  for (let i = 0; i < assign.length; i++) {
+    const p = personMap[assign[i].personId];
+    if (!p) continue;
+    const pri = state.naturePriority?.[p.nature] ?? 99;
+    const key = assign[i].seat.regionId + '_' + assign[i].seat.row + '_' + assign[i].seat.col;
+    const seatIdx = seatIndexMap[key] ?? 999;
+    cost += seatIdx * (100 - pri) * wPos;
+    // 集团优先级：同性质内，集团优先级高的更靠近目标区域
+    const gPri = state.groupPriority?.[p.group] ?? 99;
+    if (gPri < 99) cost += seatIdx * (100 - gPri) * wPos * 0.3;
+  }
+  const byCompany = {};
+  for (const a of assign) {
+    const p = personMap[a.personId];
+    if (!p) continue;
+    if (!byCompany[p.company]) byCompany[p.company] = [];
+    byCompany[p.company].push(a.seat);
+  }
+  for (const company in byCompany) {
+    const seats = byCompany[company];
+    for (let i = 0; i < seats.length; i++) {
+      for (let j = i+1; j < seats.length; j++) {
+        cost += seatDist(seats[i], seats[j]) * wCo;
+      }
+    }
+  }
+  // 3. 同集团聚集成本
+  const byGroup = {};
+  for (const a of assign) {
+    const p = personMap[a.personId];
+    if (!p || !p.group) continue;
+    if (!byGroup[p.group]) byGroup[p.group] = [];
+    byGroup[p.group].push(a.seat);
+  }
+  for (const group in byGroup) {
+    const seats = byGroup[group];
+    for (let i = 0; i < seats.length; i++) {
+      for (let j = i+1; j < seats.length; j++) {
+        cost += seatDist(seats[i], seats[j]) * wGroup;
+      }
+    }
+  }
+  return cost;
+}
+
+let autoSeatStop = false;
+function stopAutoSeat() { autoSeatStop = true; }
+function toggleNaturePriority() {}
+function toggleAutoSettings() {
+  const body = document.getElementById('autoSettingsBody');
+  const toggle = document.getElementById('autoSettingsToggle');
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    toggle.textContent = '▼';
+  } else {
+    body.style.display = 'none';
+    toggle.textContent = '▶';
+  }
+}
+async function startAutoSeat() {
+  confirmDialog('自动排座', '将清空当前所有入座并重新排座，确定？', async () => {
+    closeModal('confirmModal'); // 立即关闭确认弹窗
+    const mode = document.getElementById('seatMode').value;
+    const totalTime = parseInt(document.getElementById('calcTime').value) || 10;
+    const numThreads = Math.min(parseInt(document.getElementById('threadNum').value) || 1, navigator.hardwareConcurrency || 4);
+    const useLimit = document.getElementById('limitRegionChk').checked;
+    // 读性质优先级
+    const np = {};
+    document.querySelectorAll('#naturePriorityList input').forEach(inp => {
+      np[inp.dataset.nature] = parseInt(inp.value) || 99;
+    });
+    state.naturePriority = np;
+
+    // 清空所有座位
+    const scope = document.getElementById('seatScope').value;
+    if (scope === 'clear') {
+      // 清空重排：所有人清掉
+      state.regions.forEach(r => {
+        for (let i = 0; i < r.rows; i++)
+          for (let j = 0; j < r.cols; j++)
+            if (r.seats[i][j] && !r.seats[i][j].off) r.seats[i][j] = null;
+      });
+      state.people.forEach(p => p.seatedAt = null);
+    }
+    // 收集未入座人员
+    const people = state.people.filter(p => !p.seatedAt);
+    if (people.length === 0) { toast('没有待排人员'); return; }
+    people.sort((a,b) => {
+      const na = np[a.nature] ?? 99, nb = np[b.nature] ?? 99;
+      if (na !== nb) return na - nb;
+      const ga = a.group ? (groupPriority[a.group] ?? 50) : 99;
+      const gb = b.group ? (groupPriority[b.group] ?? 50) : 99;
+      if (ga !== gb) return ga - gb;
+      if (a.company !== b.company) return a.company < b.company ? -1 : 1;
+      return a.name < b.name ? -1 : 1;
+    });
+
+    allSeats = getVenueSeatSequence(mode);
+    // 未入座排座时，排除已被占用的座位
+    if (scope === 'unseated') {
+      const occupied = new Set(state.people.filter(p => p.seatedAt).map(p => p.seatedAt.regionId + '_' + p.seatedAt.row + '_' + p.seatedAt.col));
+      allSeats = allSeats.filter(s => !occupied.has(s.regionId + '_' + s.row + '_' + s.col));
+    }
+    // 预计算索引Map，加速calcCost
+    seatIndexMap = {};
+    allSeats.forEach((s, idx) => { seatIndexMap[s.regionId + '_' + s.row + '_' + s.col] = idx; });
+    personMap = {};
+    state.people.forEach(p => { personMap[p.id] = p; });
+
+    // 贪心初始分配：严格按性质分层，高优先级在前排，前排先占满
+    const initialAssign = [];
+    const byNature = {};
+    people.forEach(p => {
+      const n = p.nature || '其他';
+      if (!byNature[n]) byNature[n] = [];
+      byNature[n].push(p);
+    });
+    const sortedNatures = Object.keys(byNature).sort((a,b) => (np[a]??99) - (np[b]??99));
+    natureSeatRange = {};
+    let si = 0;
+    for (const nat of sortedNatures) {
+      const rangeStart = si;
+      // 同性质内按公司分组，同公司连续占座
+      const natPeople = byNature[nat];
+      const byCompany = {};
+      natPeople.forEach(p => {
+        if (!byCompany[p.company]) byCompany[p.company] = [];
+        byCompany[p.company].push(p);
+      });
+      const companies = Object.keys(byCompany).sort();
+      for (const comp of companies) {
+        for (const p of byCompany[comp]) {
+          initialAssign.push({personId: p.id, seat: allSeats[si++]});
+        }
+      }
+      natureSeatRange[nat] = { start: rangeStart, end: si };
+    }
+
+    // 初始化日志
+    const logBox = document.getElementById('autoLog');
+    logBox.innerHTML = '';
+    const addLog = (msg) => {
+      logBox.innerHTML += `<div style="padding:2px 0;border-bottom:1px solid #F0F0F0">${new Date().toLocaleTimeString()} ${msg}</div>`;
+      logBox.scrollTop = logBox.scrollHeight;
+    };
+    addLog(`开始排座：${people.length} 人，${allSeats.length} 个可用座位，${numThreads} 线程，共 ${totalTime} 秒`);
+
+    autoSeatStop = false;
+    document.getElementById('stopAutoBtn').style.display = '';
+    // 历史最优记录
+    historyBests = [];
+    fixCount = 0;
+    globalBestCost = Infinity;
+    document.getElementById('bestCount').textContent = '0';
+    document.getElementById('bestSlider').max = 0;
+    document.getElementById('bestSlider').value = 0;
+    document.getElementById('bestInfo').textContent = '暂无最优解';
+    function saveBest(assign, cost, thread) {
+      // 只有比历史最优更好才记录
+      if (cost >= globalBestCost - 0.01) return;
+      globalBestCost = cost;
+      lastBestTime = Date.now();
+      fixCount++;
+      const companies = new Set(assign.map(a => {
+        const p = state.people.find(p => p.id === a.personId);
+        return p ? p.company : '';
+      }));
+      historyBests.push({assign: assign.map(a => ({...a, seat: {...a.seat}})), cost, thread, time: Date.now(), people: assign.length, companies: companies.size});
+      document.getElementById('bestCount').textContent = fixCount;
+      const slider = document.getElementById('bestSlider');
+      slider.max = historyBests.length - 1;
+      slider.value = historyBests.length - 1;
+      document.getElementById('bestInfo').textContent = `#${historyBests.length} 成本 ${Math.round(cost)}，${assign.length} 人，${companies.size} 家公司，线程 ${thread}`;
+      addLog(`★ 修复 #${fixCount}：线程${thread}，成本 ${Math.round(cost)}，${assign.length} 人，${companies.size} 家公司`);
+      // 实时渲染到画布（用临时数据，不影响计算）
+      previewBestData(assign);
+    }
+
+    // 多线程交替执行（模拟同时计算）
+    const overallStart = Date.now();
+    let totalIter = 0;
+    let lastBestTime = Date.now();
+    const noImproveLimit = 180 * 1000; // 3分钟无新修复停止
+    // 初始化每个线程
+    const threads = [];
+    for (let t = 0; t < numThreads; t++) {
+      let cur = initialAssign.map(a => ({...a, seat: {...a.seat}}));
+      let curCost = calcCost(cur);
+      threads.push({
+        cur, curCost, best: cur.map(a => ({...a, seat: {...a.seat}})), bestCost: curCost,
+        temp: 100, cooling: 0.995, iter: 0
+      });
+      addLog(`线程 ${t+1} 启动，初始成本 ${Math.round(curCost)}`);
+    }
+    // 记录初始最优
+    saveBest(threads[0].best, threads[0].bestCost, 0);
+
+    // 交替执行每个线程的迭代
+    while (Date.now() - overallStart < totalTime * 1000) {
+      if (autoSeatStop) { addLog('★ 用户手动停止'); break; }
+      // 3分钟无新修复自动停止
+      if (Date.now() - lastBestTime > noImproveLimit) {
+        addLog('★ 3分钟无新方案，自动停止');
+        break;
+      }
+      for (let t = 0; t < numThreads; t++) {
+        const th = threads[t];
+        // 每个线程跑一批迭代
+        for (let batch = 0; batch < 50; batch++) {
+          th.iter++;
+          totalIter++;
+          // 80%概率SA交换，20%概率LNS破坏重建
+          if (Math.random() < 0.8) {
+            // 退火交换：同排相邻交换，允许跨性质，让同公司聚集
+            const i = Math.floor(Math.random() * th.cur.length);
+            const j = Math.floor(Math.random() * th.cur.length);
+            if (i === j) continue;
+            if (th.cur[i].seat.row !== th.cur[j].seat.row) continue;
+            if (Math.abs(th.cur[i].seat.col - th.cur[j].seat.col) > 1) continue;
+            if (useLimit) {
+              const ri = regionLimitConfig[th.cur[j].seat.regionId];
+              const rj = regionLimitConfig[th.cur[i].seat.regionId];
+              if (ri && ri.length && !ri.includes(pi.nature)) continue;
+              if (rj && rj.length && !rj.includes(pj.nature)) continue;
+            }
+            const tmp = th.cur[i].seat;
+            th.cur[i].seat = th.cur[j].seat;
+            th.cur[j].seat = tmp;
+            const newCost = calcCost(th.cur);
+            const delta = newCost - th.curCost;
+            if (delta < 0 || Math.random() < Math.exp(-delta / th.temp)) {
+              th.curCost = newCost;
+              if (newCost < th.bestCost) {
+                th.bestCost = newCost;
+                th.best = th.cur.map(a => ({...a, seat: {...a.seat}}));
+                saveBest(th.best, th.bestCost, t+1);
+              }
+            } else {
+              const tmp2 = th.cur[i].seat;
+              th.cur[i].seat = th.cur[j].seat;
+              th.cur[j].seat = tmp2;
+            }
+          } else {
+            // LNS：按公司整体取出，只在自己性质段内找空位
+            const companiesInCur = [...new Set(th.cur.map(a => personMap[a.personId].company))];
+            const pickCompany = companiesInCur[Math.floor(Math.random() * companiesInCur.length)];
+            const pickNature = personMap[th.cur.find(a => personMap[a.personId].company === pickCompany).personId].nature;
+            const removed = th.cur.filter(a => personMap[a.personId].company === pickCompany);
+            th.cur = th.cur.filter(a => personMap[a.personId].company !== pickCompany);
+            const usedSeats = new Set(th.cur.map(a => a.seat.regionId + '_' + a.seat.row + '_' + a.seat.col));
+            // 只在自己性质段内找空位
+            const range = natureSeatRange[pickNature];
+            let emptySeats;
+            if (range) {
+              emptySeats = allSeats.slice(range.start, range.end).filter(s => !usedSeats.has(s.regionId + '_' + s.row + '_' + s.col));
+            } else {
+              emptySeats = allSeats.filter(s => !usedSeats.has(s.regionId + '_' + s.row + '_' + s.col));
+            }
+            // 放公司：必须全部放在段内空位，不够就放弃
+            if (emptySeats.length >= removed.length) {
+              const blockIdx = findConsecutiveSeats(emptySeats, removed.length, 0);
+              if (blockIdx >= 0) {
+                for (let k = 0; k < removed.length; k++) {
+                  th.cur.push({personId: removed[k].personId, seat: emptySeats[blockIdx + k]});
+                }
+              } else {
+                // 找不到完整连续块，按顺序填满段内空位，不留下空座
+                for (let k = 0; k < removed.length; k++) {
+                  th.cur.push({personId: removed[k].personId, seat: emptySeats[k]});
+                }
+              }
+            } else {
+              // 段内空位不够，放弃这次LNS，全部放回原座位
+              for (const item of removed) th.cur.push(item);
+            }
+            const newCost = calcCost(th.cur);
+            const delta = newCost - th.curCost;
+            if (delta < 0 || Math.random() < Math.exp(-delta / th.temp)) {
+              th.curCost = newCost;
+              if (newCost < th.bestCost) {
+                th.bestCost = newCost;
+                th.best = th.cur.map(a => ({...a, seat: {...a.seat}}));
+                saveBest(th.best, th.bestCost, t+1);
+              }
+            } else {
+              // 回退：恢复removed
+              for (const item of removed) th.cur.splice(th.cur.findIndex(a => a.personId === item.personId), 1);
+              th.cur.push(...removed);
+            }
+          }
+          th.temp *= th.cooling;
+        }
+      }
+      // 更新进度
+      const elapsed = (Date.now() - overallStart) / 1000;
+      document.getElementById('progressBar').style.width = Math.min(100, elapsed / totalTime * 100) + '%';
+      document.getElementById('progressText').textContent = `计算中... 总迭代 ${totalIter}，修复 ${fixCount} 次（超时3分钟无新方案自动停止）`;
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    // 取最终全局最优
+    let globalBest = historyBests[historyBests.length-1].assign;
+
+    // 应用最优解
+    state.regions.forEach(r => {
+      for (let i = 0; i < r.rows; i++)
+        for (let j = 0; j < r.cols; j++)
+          if (r.seats[i][j] && !r.seats[i][j].off) r.seats[i][j] = null;
+    });
+    state.people.forEach(p => p.seatedAt = null);
+    globalBest.forEach(a => {
+      const r = state.regions.find(r => r.id === a.seat.regionId);
+      r.seats[a.seat.row][a.seat.col] = {personId: a.personId};
+      const p = state.people.find(p => p.id === a.personId);
+      p.seatedAt = {regionId: a.seat.regionId, row: a.seat.row, col: a.seat.col};
+    });
+
+    renderAll();
+    document.getElementById('progressBar').style.width = '100%';
+    document.getElementById('progressText').textContent = `完成：${globalBest.length} 人，最优成本 ${Math.round(globalBestCost)}，总迭代 ${totalIter} 次`;
+    addLog(`全部完成：${globalBest.length} 人入座，最优成本 ${Math.round(globalBestCost)}，总迭代 ${totalIter} 次`);
+    document.getElementById('stopAutoBtn').style.display = 'none';
+    toast('自动排座完成');
+  });
+}
+
+let historyBests = [];
+function previewBestData(assign) {
+  // 直接修改 state 并渲染（计算用的是 th.cur 副本，不影响）
+  state.regions.forEach(r => {
+    for (let i = 0; i < r.rows; i++)
+      for (let j = 0; j < r.cols; j++)
+        if (r.seats[i][j] && !r.seats[i][j].off) r.seats[i][j] = null;
+  });
+  state.people.forEach(p => p.seatedAt = null);
+  assign.forEach(a => {
+    const r = state.regions.find(r => r.id === a.seat.regionId);
+    r.seats[a.seat.row][a.seat.col] = {personId: a.personId};
+    const p = state.people.find(p => p.id === a.personId);
+    p.seatedAt = {regionId: a.seat.regionId, row: a.seat.row, col: a.seat.col};
+  });
+  renderSeatCanvas();
+  if (state.layoutMode) renderLayoutView();
+}
+function previewBest(idx) {
+  if (!historyBests[idx]) return;
+  const b = historyBests[idx];
+  document.getElementById('bestInfo').textContent = `#${parseInt(idx)+1} 成本 ${Math.round(b.cost)}，${b.people} 人，${b.companies} 家公司，线程 ${b.thread}`;
+  // 预览该最优解
+  state.regions.forEach(r => {
+    for (let i = 0; i < r.rows; i++)
+      for (let j = 0; j < r.cols; j++)
+        if (r.seats[i][j] && !r.seats[i][j].off) r.seats[i][j] = null;
+  });
+  state.people.forEach(p => p.seatedAt = null);
+  b.assign.forEach(a => {
+    const r = state.regions.find(r => r.id === a.seat.regionId);
+    r.seats[a.seat.row][a.seat.col] = {personId: a.personId};
+    const p = state.people.find(p => p.id === a.personId);
+    p.seatedAt = {regionId: a.seat.regionId, row: a.seat.row, col: a.seat.col};
+  });
+  renderAll();
+}
+
+let selectedCompanies = [];
+function seatZoomHandler(e) {
+  if (state.layoutMode) return;
+  e.preventDefault();
+  state.seatZoom = Math.min(3, Math.max(0.5, (state.seatZoom || 1.2) + (e.deltaY < 0 ? 0.1 : -0.1)));
+  renderSeatCanvas();
+}
+let sortState = { key: null, dir: 0 };
+const DISPLAY_FIELDS = [
+  {key:'name', label:'姓名'},
+  {key:'company', label:'公司'},
+  {key:'title', label:'职位'},
+  {key:'group', label:'集团'}
+];
+function openDisplayModal() {
+  const box = document.getElementById('displayFields');
+  box.innerHTML = DISPLAY_FIELDS.map(f => {
+    const checked = state.seatDisplay.fields.includes(f.key) ? 'checked' : '';
+    const primary = state.seatDisplay.primary === f.key ? 'checked' : '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0">
+      <label style="flex:1"><input type="checkbox" data-f="${f.key}" ${checked}> ${f.label}</label>
+      <label style="font-size:11px;color:var(--text-2)"><input type="radio" name="primaryField" value="${f.key}" ${primary}> 主信息</label>
+    </div>`;
+  }).join('');
+  document.getElementById('displayModal').classList.add('show');
+}
+function saveDisplay() {
+  const checked = [...document.querySelectorAll('#displayFields input[type=checkbox]:checked')].map(c => c.dataset.f);
+  if (checked.length < 1) { toast('至少选1项'); return; }
+  if (checked.length > 3) { toast('最多选3项'); return; }
+  const primary = document.querySelector('#displayFields input[name=primaryField]:checked')?.value || checked[0];
+  state.seatDisplay = { fields: checked, primary };
+  closeModal('displayModal');
+  renderSeatCanvas();
+  if (state.layoutMode) renderLayoutView();
+}
+function closeModal(id) { document.getElementById(id).classList.remove('show'); } // 0=无,1=升,-1=降
+function toggleSort(key) {
+  if (sortState.key !== key) { sortState = { key, dir: 1 }; }
+  else if (sortState.dir === 1) { sortState.dir = -1; }
+  else if (sortState.dir === -1) { sortState = { key: null, dir: 0 }; }
+  document.querySelectorAll('.sortable').forEach(th => {
+    th.classList.toggle('sort-asc', th.dataset.sort === sortState.key && sortState.dir === 1);
+    th.classList.toggle('sort-desc', th.dataset.sort === sortState.key && sortState.dir === -1);
+  });
+  renderUnseated();
+  renderSeated();
+}
+function switchSubTab(tab) {
+  document.querySelectorAll('.sub-tab').forEach(b => b.classList.toggle('active', b.dataset.sub === tab));
+  document.getElementById('subPerson').style.display = tab === 'person' ? 'flex' : 'none';
+  document.getElementById('subCompany').style.display = tab === 'company' ? 'flex' : 'none';
+  if (tab === 'company') renderCompanyList();
+}
+function renderCompanyList() {
+  const seated = state.people.filter(p => p.seatedAt);
+  const byCompany = {};
+  seated.forEach(p => {
+    if (!byCompany[p.company]) byCompany[p.company] = {company: p.company, group: p.group||'', nature: p.nature||'', count: 0};
+    byCompany[p.company].count++;
+  });
+  const np = state.naturePriority || {};
+  const list = Object.values(byCompany).sort((a,b) => {
+    const n = (np[a.nature]??99) - (np[b.nature]??99);
+    if (n !== 0) return n;
+    const g = (a.group||'').localeCompare(b.group||'');
+    if (g !== 0) return g;
+    return b.count - a.count;
+  });
+  const tbody = document.getElementById('companyBody');
+  tbody.innerHTML = list.map(c => `<tr class="company-row ${selectedCompanies.includes(c.company)?'selected':''}" onclick="toggleCompany('${esc(c.company)}')">
+    <td>${esc(c.group)}</td><td>${natureBadge(c.nature)}</td><td>${esc(c.company)}</td><td style="text-align:center">${c.count}</td>
+  </tr>`).join('');
+  document.getElementById('companyEmpty').style.display = list.length ? 'none' : '';
+}
+function toggleCompany(name) {
+  if (selectedCompanies.includes(name)) {
+    selectedCompanies = selectedCompanies.filter(c => c !== name);
+  } else {
+    if (selectedCompanies.length >= 3) { toast('最多选3个公司'); return; }
+    selectedCompanies.push(name);
+  }
+  renderCompanyList();
+  renderSeatCanvas();
+  if (state.layoutMode) renderLayoutView();
+}
+function highlightCompanySeat(seatEl, p) {
+  if (selectedCompanies.includes(p.company)) {
+    seatEl.style.outline = '2px solid #F59E0B';
+    seatEl.style.outlineOffset = '-2px';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
