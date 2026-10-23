@@ -92,8 +92,7 @@ th.sort-desc .sort-arrow::after { content:'↓'; opacity:1; color:var(--primary)
 #regionEditPanel { flex: 1.2; }
 #regionPreviewPanel { flex: 1; }
 .region-grid-wrap {
-  display: flex; justify-content: center; align-items: center;
-  padding: 14px; overflow: auto;
+  padding: 14px; overflow: auto; display: flex; justify-content: center; align-items: flex-start;
 }
 .region-grid {
   display: grid; gap: 6px; position: relative;
@@ -172,7 +171,7 @@ th.sort-desc .sort-arrow::after { content:'↓'; opacity:1; color:var(--primary)
 .region-label { font-size: 12px; color: var(--text-2); margin-bottom: 2px; font-weight: 600; }
 .seat-grid { display: grid; gap: 6px; }
 .seat {
-  width: 76px; height: 60px; border-radius: 8px;
+  width: 76px; height: 68px; border-radius: 8px;
   transition: all .1s;
   background: #fff; border: 1px solid var(--border);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -196,9 +195,10 @@ th.sort-desc .sort-arrow::after { content:'↓'; opacity:1; color:var(--primary)
   0%, 100% { box-shadow: 0 0 0 2px #F59E0B, 0 0 8px rgba(245,158,11,0.6); }
   50% { box-shadow: 0 0 0 4px rgba(245,158,11,0.3), 0 0 18px rgba(245,158,11,1); }
 }
-.seat .seat-id { font-size: 9px; opacity: .7; line-height: 1; margin-bottom: 1px; }
-.seat .seat-name { font-size: 11px; font-weight: 600; line-height: 1.2; }
-.seat .seat-meta { font-size: 9px; opacity: .85; line-height: 1.2; }
+.seat .seat-id { font-size: 9px; opacity: .7; line-height: 1; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; min-width: 0; }
+.seat .seat-name { font-size: 11px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; min-width: 0; }
+.seat .seat-meta { font-size: 9px; opacity: .85; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.seat .seat-company { font-size: 9px; opacity: .85; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-all; max-width: 100%; }
 .seat.drag-over { outline: 2px dashed var(--primary); outline-offset: 2px; }
 /* ===== 右栏：人员列表 ===== */
 #unseatPanel { flex: 1; min-height: 0; }
@@ -217,6 +217,8 @@ table.person-table th, table.person-table td {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 table.person-table th { color: var(--text-2); font-weight: 500; background: #FAFBFD; position: sticky; top: 0; }
+table.person-table th .col-resizer { position: absolute; right: 0; top: 0; width: 5px; height: 100%; cursor: col-resize; user-select: none; }
+table.person-table th .col-resizer:hover { background: var(--primary); }
 table.person-table tr { cursor: pointer; }
 table.person-table tbody tr:hover { background: var(--primary-light); }
 table.person-table tbody tr.selected { background: var(--primary-light); }
@@ -295,7 +297,7 @@ table.person-table tbody tr.selected { background: var(--primary-light); }
 .layout-region:hover { border-color: var(--primary); }
 .layout-region.active { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,110,247,.15); }
 .layout-region .lr-label {
-  font-size: 24px; font-weight: 600; margin-bottom: 6px; text-align: center; color: var(--text);
+  font-size: 12px; font-weight: 600; margin-bottom: 6px; text-align: center; color: var(--text);
 }
 .layout-seat-grid { display: grid; gap: 3px; }
 .ls {
@@ -469,7 +471,7 @@ table.person-table tbody tr.selected { background: var(--primary-light); }
   <!-- 左栏 -->
   <div class="col-left">
     <div class="panel" id="regionEditPanel">
-      <div class="panel-head">区域编辑</div>
+      <div class="panel-head">区域编辑 <button class="btn btn-sm btn-danger" style="margin-left:auto;padding:2px 8px;font-size:11px" onclick="clearAllRegions()">删除所有</button></div>
       <div class="panel-body region-grid-wrap" id="regionGridWrap"></div>
     </div>
     <div class="panel" id="regionPreviewPanel">
@@ -1254,6 +1256,25 @@ function deleteRegion(reg) {
     toast('已删除');
   });
 }
+function clearAllRegions() {
+  if (localStorage.getItem('seat_role') !== 'admin') { toast('普通用户无删除权限'); return; }
+  if (state.regions.length <= 1) { toast('只剩一个区域了'); return; }
+  confirmDialog('删除所有区域', '确定删除所有区域吗？仅保留A区，所有已入座人员将释放回未入座列表。', () => {
+    state.regions.forEach(r => {
+      if (r.name === 'A区') return;
+      r.seats.forEach(row => row.forEach(s => {
+        if (s && s.personId) {
+          const p = state.people.find(p => p.id === s.personId);
+          if (p) p.seatedAt = null;
+        }
+      }));
+    });
+    state.regions = state.regions.filter(r => r.name === 'A区');
+    state.selectedRegionId = state.regions[0].id;
+    renderAll();
+    toast('已清空，仅保留A区');
+  });
+}
 function swapRegionPos(srcId, dstId) {
   const s = state.regions.find(r => r.id === srcId);
   const d = state.regions.find(r => r.id === dstId);
@@ -1431,7 +1452,8 @@ function renderSeatCanvas() {
           }
           div.innerHTML = `<div class="seat-id">${seatId}</div>` + state.seatDisplay.fields.map((f,i) => {
             const v = f==='name'?p.name:f==='company'?p.company:f==='title'?(p.title||''):(p.group||'');
-            return `<div class="${f===state.seatDisplay.primary?'seat-name':'seat-meta'}">${esc(v)}</div>`;
+            const cls = f===state.seatDisplay.primary?'seat-name':(f==='company'?'seat-company':'seat-meta');
+            return `<div class="${cls}">${esc(v)}</div>`;
           }).join('');
           div.onmouseenter = (e) => showTooltip(e, p, seatId);
           div.onmouseleave = hideTooltip;
@@ -2086,7 +2108,7 @@ function renderLayoutView() {
   // 按所有区域最大行列数统一卡片尺寸，确保座位完整显示不滚动
   let maxCols = 0, maxRows = 0;
   state.regions.forEach(r => { maxCols = Math.max(maxCols, r.cols); maxRows = Math.max(maxRows, r.rows); });
-  const seatW = 76, seatH = 60, gap = 6;
+  const seatW = 76, seatH = 68, gap = 6;
   const CELL_W = maxCols * seatW + (maxCols-1) * gap + 20;
   const CELL_H = maxRows * seatH + (maxRows-1) * gap + 50;
   const GAP = 50;
@@ -2135,7 +2157,7 @@ function renderLayoutView() {
         const d = document.createElement('div');
         d.className = 'seat';
         d.dataset.seat = r.id + '-' + si + '-' + sj;
-        d.style.width = '76px'; d.style.height = '60px';
+        d.style.width = '76px'; d.style.height = '68px';
         d.style.overflow = 'hidden';
         // 高亮定位座位
         if (state.highlightSeat && state.highlightSeat.regionId === r.id && state.highlightSeat.row === si && state.highlightSeat.col === sj) {
@@ -2158,7 +2180,8 @@ function renderLayoutView() {
             }
             d.innerHTML = `<div class="seat-id">${seatId}</div>` + state.seatDisplay.fields.map(f => {
               const v = f==='name'?p.name:f==='company'?p.company:f==='title'?(p.title||''):(p.group||'');
-              return `<div class="${f===state.seatDisplay.primary?'seat-name':'seat-meta'}">${esc(v)}</div>`;
+              const cls = f===state.seatDisplay.primary?'seat-name':(f==='company'?'seat-company':'seat-meta');
+              return `<div class="${cls}">${esc(v)}</div>`;
             }).join('');
             d.draggable = !(typeof isMobile !== 'undefined' && isMobile);
             d.ondragstart = (e) => {
@@ -2351,7 +2374,7 @@ function exportImage() {
         const s = r.seats[si][sj];
         const seatId = r.name + '-' + (si+1) + '-' + (sj+1);
         const d = document.createElement('div');
-        d.style.cssText = 'width:76px;height:60px;border-radius:8px;border:1px solid #E3E5EC;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px;text-align:center;overflow:hidden;font-family:sans-serif';
+        d.style.cssText = 'width:76px;height:68px;border-radius:8px;border:1px solid #E3E5EC;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px;text-align:center;overflow:hidden;font-family:sans-serif';
         if (s && s.off) {
           d.style.background = '#C8CBD6';
           d.innerHTML = '<div style="font-size:9px;opacity:.7">' + seatId + '</div>';
@@ -3236,7 +3259,50 @@ function highlightCompanySeat(seatEl, p) {
   }
 }
 
+// 列宽拖拽
+function initColumnResize() {
+  document.querySelectorAll('table.person-table').forEach(table => {
+    // 先 auto 布局测量内容宽度，再切 fixed
+    table.style.tableLayout = 'auto';
+    const ths = table.querySelectorAll('thead th');
+    ths.forEach(th => { th.style.width = ''; });
+    // 强制重排后读取实际宽度
+    void table.offsetWidth;
+    ths.forEach(th => {
+      th.style.width = th.offsetWidth + 'px';
+    });
+    table.style.tableLayout = 'fixed';
+    // 加拖拽手柄
+    ths.forEach(th => {
+      if (th.querySelector('.col-resizer')) return;
+      const rz = document.createElement('div');
+      rz.className = 'col-resizer';
+      th.appendChild(rz);
+      rz.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const startX = e.clientX;
+        const startW = th.offsetWidth;
+        const startTableW = table.offsetWidth;
+        const onMove = (ev) => {
+          const delta = ev.clientX - startX;
+          const newW = Math.max(10, startW + delta);
+          th.style.width = newW + 'px';
+          table.style.width = (startTableW + delta) + 'px';
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    });
+  });
+}
+
 init();
+setTimeout(initColumnResize, 500);
 
 // ==================== 移动端适配 ====================
 const isMobile = window.matchMedia('(max-width: 768px)').matches || ('ontouchstart' in window && window.innerWidth < 1024);
@@ -3395,7 +3461,7 @@ function mobileLocatePerson(pid) {
   // 座位中心在 canvas border box 内的坐标
   // canvas padding 40px
   const seatCX = 40 + rx + 10 + gridOffX + col*(76+6) + 38;
-  const seatCY = 40 + ry + 10 + 18 + gridOffY + row*(60+6) + 30;
+  const seatCY = 40 + ry + 10 + 18 + gridOffY + row*(68+6) + 34;
   state.viewX = vp.clientWidth/2 - seatCX * state.viewScale;
   state.viewY = vp.clientHeight/2 - seatCY * state.viewScale;
   document.getElementById('layoutCanvas').style.transform =
