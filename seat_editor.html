@@ -359,7 +359,8 @@ table.person-table tbody tr.selected { background: var(--primary-light); }
   .col-center { padding: 0; flex: 1; display: flex; flex-direction: column; min-height: 0; }
   .canvas-wrap { flex: 1; padding: 0; overflow: hidden; }
   .canvas-wrap.full { padding: 0; }
-  .layout-viewport { touch-action: none; -webkit-user-select: none; user-select: none; }
+  .layout-viewport { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .layout-viewport * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .stage { display: none !important; }
   #stageNormal { display: none !important; }
   .layout-stage { display: block !important; }
@@ -3361,10 +3362,12 @@ function mobileLocatePerson(pid) {
   if (!seatEl || !vp) return;
   // 临时重置 transform，读座位在 canvas 内的精确布局坐标
   canvas.style.transform = 'none';
-  const pos = getSeatCanvasPos(seatEl);
-  // 计算居中位置
-  state.viewX = vp.clientWidth/2 - (pos.x + 38) * state.viewScale;
-  state.viewY = vp.clientHeight/2 - (pos.y + 30) * state.viewScale;
+  const sr = seatEl.getBoundingClientRect();
+  const cr = canvas.getBoundingClientRect();
+  const seatCX = sr.left - cr.left + sr.width/2;
+  const seatCY = sr.top - cr.top + sr.height/2;
+  state.viewX = vp.clientWidth/2 - seatCX * state.viewScale;
+  state.viewY = vp.clientHeight/2 - seatCY * state.viewScale;
   canvas.style.transform =
     `translate(${state.viewX}px, ${state.viewY}px) scale(${state.viewScale})`;
   setTimeout(() => {
