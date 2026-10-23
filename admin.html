@@ -22,6 +22,15 @@ th { color:#666; font-weight:500; }
 .form-row label { display:block; font-size:13px; color:#666; margin-bottom:4px; }
 .form-row input, .form-row select { width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:6px; font-size:14px; }
 .toast { position:fixed; top:20px; right:20px; background:#333; color:#fff; padding:12px 20px; border-radius:8px; font-size:14px; display:none; }
+@media (max-width: 768px) {
+  body { padding: 10px; }
+  .header { padding: 12px; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .header h1 { font-size: 16px; }
+  .card { padding: 12px; }
+  .form-row { flex: 1 1 100% !important; min-width: 0 !important; }
+  th, td { padding: 8px 6px; font-size: 12px; }
+  .card table { display: block; overflow-x: auto; }
+}
 </style>
 </head>
 <body>
