@@ -3355,13 +3355,17 @@ function mobileLocatePerson(pid) {
   toast(`${p.company} · ${p.name} · ${p.title||''}`);
   const {regionId, row, col} = p.seatedAt;
   renderLayoutView();
+  const canvas = document.getElementById('layoutCanvas');
   const seatEl = document.querySelector(`[data-seat="${regionId}-${row}-${col}"]`);
   const vp = document.getElementById('layoutViewport');
   if (!seatEl || !vp) return;
+  // 临时重置 transform，读座位在 canvas 内的精确布局坐标
+  canvas.style.transform = 'none';
   const pos = getSeatCanvasPos(seatEl);
+  // 计算居中位置
   state.viewX = vp.clientWidth/2 - (pos.x + 38) * state.viewScale;
   state.viewY = vp.clientHeight/2 - (pos.y + 30) * state.viewScale;
-  document.getElementById('layoutCanvas').style.transform =
+  canvas.style.transform =
     `translate(${state.viewX}px, ${state.viewY}px) scale(${state.viewScale})`;
   setTimeout(() => {
     const el = document.querySelector(`[data-seat="${regionId}-${row}-${col}"]`);
