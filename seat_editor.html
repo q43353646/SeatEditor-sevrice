@@ -1269,9 +1269,16 @@ function swapRegionPos(srcId, dstId) {
 let addRegionPos = {gx:0, gy:0};
 function openAddRegion(gx, gy) {
   addRegionPos = {gx, gy};
-  document.getElementById('fr_name').value = LETTERS[state.nextLetterIdx % 26] + '区';
-  document.getElementById('fr_rows_val').textContent = 5;
-  document.getElementById('fr_cols_val').textContent = 4;
+  // 找最小可用字母（不在现有区域名里的）
+  const usedLetters = new Set(state.regions.map(r => r.name.replace('区','').charAt(0).toUpperCase()));
+  let letter = 'A';
+  for (let i = 0; i < 26; i++) {
+    const l = String.fromCharCode(65 + i);
+    if (!usedLetters.has(l)) { letter = l; break; }
+  }
+  document.getElementById('fr_name').value = letter + '区';
+  document.getElementById('fr_rows_val').textContent = 6;
+  document.getElementById('fr_cols_val').textContent = 7;
   document.getElementById('addRegionModal').classList.add('show');
 }
 function adjustRegionDims(d, key) {
