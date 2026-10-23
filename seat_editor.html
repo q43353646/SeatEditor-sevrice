@@ -420,10 +420,10 @@ table.person-table tbody tr.selected { background: var(--primary-light); }
 
   /* 座位高亮闪烁动画 */
   @keyframes seatPulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(229,72,77,.7); }
-    50% { box-shadow: 0 0 0 12px rgba(229,72,77,0); }
+    0%, 100% { outline: 3px solid #E5484D; outline-offset: 2px; }
+    50% { outline: 6px solid rgba(229,72,77,.3); outline-offset: 4px; }
   }
-  .seat.pulsing { animation: seatPulse 0.8s ease-in-out 3; border-color: #E5484D !important; }
+  .seat.pulsing { animation: seatPulse 0.8s ease-in-out 3; }
 
   /* 长按菜单（移动端） */
   .mobile-seat-menu {
@@ -738,7 +738,7 @@ table.person-table tbody tr.selected { background: var(--primary-light); }
 <div class="modal-mask" id="pickPersonModal">
   <div class="modal" style="min-width:440px;max-width:90vw">
     <h3 id="pickTitle">选择人员入座</h3>
-    <input type="text" id="pickSearch" placeholder="搜索公司名称..." oninput="renderPickList()"
+    <input type="text" id="pickSearch" placeholder="搜索人员姓名或公司名称..." oninput="renderPickList()"
       style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none;margin-bottom:10px">
     <div id="pickList" style="max-height:300px;overflow:auto"></div>
     <div class="modal-actions">
@@ -2103,7 +2103,7 @@ function renderLayoutView() {
 
   state.regions.forEach(r => {
     const div = document.createElement('div');
-    div.className = 'layout-region' + (r.id === state.selectedRegionId ? ' active' : '');
+    div.className = 'layout-region' + (r.id === state.selectedRegionId && !(typeof isMobile !== 'undefined' && isMobile) ? ' active' : '');
     const px = (r.gx - minGx) * (CELL_W + GAP);
     const py = (r.gy - minGy) * (CELL_H + GAP) + stageOffset;
     div.style.left = px + 'px';
@@ -2190,10 +2190,12 @@ function renderLayoutView() {
       }
     }
     div.appendChild(g);
-    div.onclick = () => {
-      state.selectedRegionId = r.id;
-      renderAll();
-    };
+    if (!(typeof isMobile !== 'undefined' && isMobile)) {
+      div.onclick = () => {
+        state.selectedRegionId = r.id;
+        renderAll();
+      };
+    }
     container.appendChild(div);
   });
   drawMinimap(minGx, maxGx, minGy, maxGy, CELL_W, CELL_H, GAP);
@@ -3240,8 +3242,10 @@ let mobileReplaceMode = null; // {regionId, row, col}
 
 function initMobile() {
   if (!isMobile) return;
-  // 移动端禁用公司高亮（避免无限闪烁黑框）
+  // 移动端禁用公司高亮和区域选中
   selectedCompanies = [];
+  state.selectedRegionId = null;
+  if (state.layoutMode) renderLayoutView();
   // 顶部显示登录手机号
   const uname = localStorage.getItem('seat_username') || '';
   if (uname) {
@@ -3355,28 +3359,63 @@ function mobileLocatePerson(pid) {
   if (!p || !p.seatedAt) return;
   toast(`${p.company} · ${p.name} · ${p.title||''}`);
   const {regionId, row, col} = p.seatedAt;
-  renderLayoutView();
-  const canvas = document.getElementById('layoutCanvas');
-  const seatEl = document.querySelector(`[data-seat="${regionId}-${row}-${col}"]`);
   const vp = document.getElementById('layoutViewport');
-  if (!seatEl || !vp) return;
-  // 临时重置 transform，读座位在 canvas 内的精确布局坐标
-  canvas.style.transform = 'none';
-  const sr = seatEl.getBoundingClientRect();
-  const cr = canvas.getBoundingClientRect();
-  const seatCX = sr.left - cr.left + sr.width/2;
-  const seatCY = sr.top - cr.top + sr.height/2;
+  if (!vp) return;
+  const region = state.regions.find(r => r.id === regionId);
+  if (!region) return;
+  // 与 renderLayoutView 完全一致的布局参数
+  let minGx=Infinity, maxGx=-Infinity, minGy=Infinity, maxGy=-Infinity;
+  state.regions.forEach(r => {
+    minGx=Math.min(minGx,r.gx); maxGx=Math.max(maxGx,r.gx);
+    minGy=Math.min(minGy,r.gy); maxGy=Math.max(maxGy,r.gy);
+  });
+  let maxCols=0, maxRows=0;
+  state.regions.forEach(r => { maxCols=Math.max(maxCols,r.cols); maxRows=Math.max(maxRows,r.rows); });
+  const CELL_W = maxCols*76 + (maxCols-1)*6 + 20;
+  const CELL_H = maxRows*60 + (maxRows-1)*6 + 50;
+  const GAP = 50, stageOffset = 90;
+  // region 在 canvas 内的位置
+  const rx = (region.gx - minGx) * (CELL_W + GAP);
+  const ry = (region.gy - minGy) * (CELL_H + GAP) + stageOffset;
+  // region 内 padding 10px + lr-label 约18px
+  // grid 水平居中偏移
+  const regionContentW = CELL_W - 20;
+  const gridW = region.cols*76 + (region.cols-1)*6;
+  const gridOffX = (regionContentW - gridW)/2;
+  // grid 垂直居中偏移（减去 label 高度）
+  const regionContentH = CELL_H - 20 - 18;
+  const gridH = region.rows*60 + (region.rows-1)*6;
+  const gridOffY = Math.max(0, (regionContentH - gridH)/2);
+  // 座位中心在 canvas border box 内的坐标
+  // canvas padding 40px
+  const seatCX = 40 + rx + 10 + gridOffX + col*(76+6) + 38;
+  const seatCY = 40 + ry + 10 + 18 + gridOffY + row*(60+6) + 30;
   state.viewX = vp.clientWidth/2 - seatCX * state.viewScale;
   state.viewY = vp.clientHeight/2 - seatCY * state.viewScale;
-  canvas.style.transform =
+  document.getElementById('layoutCanvas').style.transform =
     `translate(${state.viewX}px, ${state.viewY}px) scale(${state.viewScale})`;
-  setTimeout(() => {
-    const el = document.querySelector(`[data-seat="${regionId}-${row}-${col}"]`);
-    if (el) {
-      el.classList.add('pulsing');
-      setTimeout(() => el.classList.remove('pulsing'), 2500);
-    }
-  }, 50);
+  // 高亮闪烁（遍历查找，避免选择器特殊字符问题）
+  const allSeats = document.querySelectorAll('#layoutRegions .seat');
+  let el = null;
+  const targetSeat = `${regionId}-${row}-${col}`;
+  allSeats.forEach(s => { if (s.dataset.seat === targetSeat) el = s; });
+  if (el) {
+    const origBg = el.style.background;
+    el.style.outline = '3px solid #E5484D';
+    el.style.outlineOffset = '2px';
+    let n = 0;
+    const timer = setInterval(() => {
+      n++;
+      if (n > 6) {
+        clearInterval(timer);
+        el.style.background = origBg;
+        el.style.outline = '';
+        el.style.outlineOffset = '';
+        return;
+      }
+      el.style.background = (n % 2 === 1) ? '#E5484D' : origBg;
+    }, 400);
+  }
 }
 
 // ===== Touch 手势 =====
