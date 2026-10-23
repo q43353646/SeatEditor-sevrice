@@ -1031,7 +1031,7 @@ function save() {
 async function init() {
   // 权限判断
   const userRole = localStorage.getItem('seat_role') || 'admin';
-  if (userRole !== 'admin') {
+  if (userRole !== 'admin' && !window.matchMedia('(max-width: 768px)').matches) {
     document.getElementById('userManageBtn').style.display = 'none';
   }
   loadDbConfig();
