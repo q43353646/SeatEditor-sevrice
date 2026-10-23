@@ -3214,10 +3214,9 @@ function renderCompanyList() {
 }
 function toggleCompany(name) {
   if (selectedCompanies.includes(name)) {
-    selectedCompanies = selectedCompanies.filter(c => c !== name);
+    selectedCompanies = [];
   } else {
-    if (selectedCompanies.length >= 3) { toast('最多选3个公司'); return; }
-    selectedCompanies.push(name);
+    selectedCompanies = [name];
   }
   renderCompanyList();
   renderSeatCanvas();
